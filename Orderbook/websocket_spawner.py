@@ -48,12 +48,20 @@ def find_tri_arb_path():
         # 1) 2 pairs need to have stable coins.
         # 2) I need to be able to chain together the 3 pairs BTC->ETH->KCS->BTC
         
-        coin_counter = 0
+        stable_coins_check = False
+        right_order_check = False
+        pairs_chain_check = False
+        pairs_list = [pair1.split("-")[0], pair1.split("-")[1], pair2.split("-")[0], pair2.split("-")[1], pair3.split("-")[0], pair3.split("-")[1]]
+
         for i in stable_coins:
-            if (par1.split("-")[0] == i and part1.split()
+            if pairs_list.count(i) == 2:
+                stable_coin_in_pairs = i
+                stable_coins_check = True
+                break
 
-
-                )
+        # Ensures the beginning and end of pairs_list are both stable coins
+        if i == pairs_list[0] or i == pairs_list[1] and i == pairs_list[4] or i == pairs_list[5]:
+            right_order_check = True
 
         if (pair1.split("-")[0] == pair2.split("-")[0] or 
             pair1.split("-")[0] == pair2.split("-")[1] or 
@@ -63,40 +71,30 @@ def find_tri_arb_path():
             pair2.split("-")[0] == pair3.split("-")[1] or
             pair2.split("-")[1] == pair3.split("-")[0] or
             pair2.split("-")[1] == pair3.split("-")[1]):
+            pairs_chain_check = True
+                    
+        if stable_coins_check and right_order_check and pairs_chain_check:
+            pair1_asks = pair1_orderbook[pair1]['asks']
+            pair1_bids = pair1_orderbook[pair1]['bids']
+            pair2_asks = pair2_orderbook[pair2]['asks']
+            pair2_bids = pair2_orderbook[pair2]['bids']
+            pair3_asks = pair3_orderbook[pair3]['asks']
+            pair3_bids = pair3_orderbook[pair3]['bids']
 
+            # Price in BTC, Amount in MANA 
+            # Bid is the price buyers are ready to buy at
+            # Ask id the price sellers are ready to sell at
+            # The coin on the left is what I am either buying of selling
+
+            where_are_stable_coins = pairs_list.index(i)
             
-
-
-
-            for i in stable_coins:
-                if i != pair1.split("-")[0]:
-                    Pairs_okay = False
-                    break
-                else:
-                    Pairs_okay = True
-
-
-
-
-
-
-                    )
-
-        Pairs_okay = False 
-        if Pairs_okay:
-
-        pair1_asks = pair1_orderbook[pair1]['asks']
-        pair1_bids = pair1_orderbook[pair1]['bids']
-        pair2_asks = pair2_orderbook[pair2]['asks']
-        pair2_bids = pair2_orderbook[pair2]['asks']
-
-        # MANA-BTC
-        # Price in BTC, Amount in MANA 
-        # Bid is the price buyers are ready to buy at
-        # Ask id the price sellers are ready to sell at
-
-
-
+            # Calculates if price is feasible
+            coin_amount = 0
+            if where_are_stable_coins[0] == 0:
+                    
+            if where_are_stable_coins[0] == 1:
+           
+        
     # Logic to determine if a path is availibe
 
 
@@ -130,9 +128,16 @@ if __name__ == "__main__":
         coin_pairs_string = coin_pairs_string[0:-1]
         
         # Runs websockets in a thread loop forever
-        #Thread(target=thread_the_process, args=(counter, coin_pairs_string)).start()
+        Thread(target=thread_the_process, args=(counter, coin_pairs_string)).start()
 
     # Determines if there is an Arbitrage
     #Thread(target=find_arb, args=()).Start()    
-    find_tri_arb_path()
+    #find_tri_arb_path()
+
+
+
+
+
+
+
 
