@@ -103,51 +103,49 @@ def find_tri_arb_path():
                     if item == pairs_list[where_are_stable_coins[1]]:
                         where_is_transaction_coin_two.append(index)            
                 if where_are_stable_coins[0] == 1:
-                    if item == pairs_list[where_are_stable_coins[0]]
+                    if item == pairs_list[where_are_stable_coins[0]]:
                         where_is_transaction_coin_two.append(index)
 
             # Transaction 3
             where_is_transaction_coin_three = [] # [3, 5]
             for index, item in enumerate(pairs_list):
-                if item == pairs_list[where_are_stable_coins[1]]
+                if item == pairs_list[where_are_stable_coins[1]]:
                     where_is_transaction_coin_two.append(index)
 
             
             # Calculates if price is feasible
             coin_amount = 0
-            starting_amount_USD = # needs to be the smallest (ask or bid) in all the pair files 
+            starting_amount_USD = 0# needs to be the smallest (ask or bid) in all the pair files 
             smallest_amount = 0 # This is the smallest order in the chain and will be the amount I trade
             if where_are_stable_coins[0] == 0:
-                if where_are_stable_coins[0] == "USDT"
+                if where_are_stable_coins[0] == "USDT":
                     if pair1_bids[0][1] >= 5:
                         coin_amount = (pair1_bids[0][0] / starting_amount_USD) * 0.001
                     else: # if pair1_bids < 5
                         coin_amount = (pair1_bids[0][0] / pair1_bids[0][1]) * 0.001
-                    coin_amount = print(int(coin_amount) + int(str(coin_amount).split(".")[1][:8] / 100000000) # math.floor rounds down, math.ceil round up
                 else:
                     if pair1_bids[0][1] >= 5:
                         coin_amount = (pair1_bids[0][0] / starting_amount_USD * 0.001) * 0.001 # Accounts for purchases from UTDT to USDC ex.
                     else: # if pair1_bids < 5
                         coin_amount = (pair1_bids[0][0] / pair1_bids[0][1]) * 0.001
-                    coin_amount = print(int(coin_amount) + int(str(coin_amount).split(".")[1][:8] / 100000000) # math.floor rounds down, math.ceil round up
 
             if where_are_stable_coins[0] == 1:
-                    if pair1_asks[0][1] >= 5:
-                        coin_amount = (pair1_asks[0][0] / starting_amount_USD) * 0.001
-                    else: # if pair1_bids < 5
-                        coin_amount = (pair1_asks[0][0] / pair1_asks[0][1]) * 0.001
-                    coin_amount = print(int(coin_amount) + int(str(coin_amount).split(".")[1][:8] / 100000000) # math.floor rounds down, math.ceil round up
-                else:
-                    if pair1_asks[0][1] >= 5:
-                        coin_amount = (pair1_asks[0][0] / starting_amount_USD * 0.001) * 0.001 # Accounts for purchases from UTDT to USDC ex.
-                    else: # if pair1_bids < 5
-                        coin_amount = (pair1_asks[0][0] / pair1_asks[0][1]) * 0.001
-                    coin_amount = print(int(coin_amount) + int(str(coin_amount).split(".")[1][:8] / 100000000) # math.floor rounds down, math.ceil round up
+                if pair1_asks[0][1] >= 5:
+                    coin_amount = (pair1_asks[0][0] / starting_amount_USD) * 0.001
+                else: # if pair1_bids < 5
+                    coin_amount = (pair1_asks[0][0] / pair1_asks[0][1]) * 0.001
+            else:
+                if pair1_asks[0][1] >= 5:
+                    coin_amount = (pair1_asks[0][0] / starting_amount_USD * 0.001) * 0.001 # Accounts for purchases from UTDT to USDC ex.
+                else: # if pair1_bids < 5
+                    coin_amount = (pair1_asks[0][0] / pair1_asks[0][1]) * 0.001
+
+            coin_amount = print(int(coin_amount) + int(str(coin_amount).split(".")[1][:8] / 100000000)) # math.floor rounds down, math.ceil round up
             
             # Transaction 2
-            if where_is_transaction_coin_two[0] == 2:
+                                        #if where_is_transaction_coin_two[0] == 2:
                 
-            if where_is_transaction_coin_two[0] == 3:
+                                        #if where_is_transaction_coin_two[0] == 3:
  
     # Logic to determine if a path is availibe
 
