@@ -1,5 +1,5 @@
 # This script is intended to be ran alone. It will index all the pairs and find the chainable ones
-from itertools import combinations
+from itertools import combinations_with_replacement
 from kucoin.client import Market
 import json
 import os
@@ -26,7 +26,7 @@ def create_catalog():
     
     json_output = []
 
-    for combo in combinations(get_tradable_coin_pairs(), 3):
+    for combo in combinations_with_replacement(get_tradable_coin_pairs(), 3):
         pair1 = combo[0].split("-")
         pair2 = combo[1].split("-")
         pair3 = combo[2].split("-")
