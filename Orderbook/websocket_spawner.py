@@ -56,12 +56,4 @@ if __name__ == "__main__":
 
     # Determines if there is an Arbitrage
     #Thread(target=find_arb, args=()).Start()    
-    #find_tri_arb_path()
-
-
-
-
-
-
-
 

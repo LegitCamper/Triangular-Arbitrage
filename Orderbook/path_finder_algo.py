@@ -9,56 +9,22 @@ stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 
 
 def find_tri_arb_path():
-    pairs_in_Results = os.listdir(f"{os.getcwd()}/Results/")
-    
-    for combo in combinations(pairs_in_Results, 3):
-        with open(f"{os.getcwd()}/Results/{combo[0]}") as f:
+    pairs_catalog = open(f"{os.getcwd()}/triangular_pairs.catalog", 'r')
+    for pairs_catalog.readlines():
+        ############## FIX
+        with open(f"{os.getcwd()}/Results/{combo[0]}", 'r') as f:
             pair1_orderbook = json.loads(f.read())
-        with open(f"{os.getcwd()}/Results/{combo[1]}") as f:
+        with open(f"{os.getcwd()}/Results/{combo[1]}", 'r') as f:
             pair2_orderbook = json.loads(f.read())
-        with open(f"{os.getcwd()}/Results/{combo[2]}") as f:
+        with open(f"{os.getcwd()}/Results/{combo[2]}", 'r') as f:
             pair3_orderbook = json.loads(f.read())
 
         pair1 = list(pair1_orderbook.keys())[0]
         pair2 = list(pair2_orderbook.keys())[0]
         pair3 = list(pair3_orderbook.keys())[0]
+        #########################
 
-        # Needs to pass two requirements:
-        # 1) 2 pairs need to have stable coins.
-        # 2) I need to be able to chain together the 3 pairs BTC->ETH->KCS->BTC
-        
-        stable_coins_check = False
-        right_order_check = False
-        pairs_chain_check = False
-        pairs_list = [pair1.split("-")[0], pair1.split("-")[1], pair2.split("-")[0], pair2.split("-")[1], pair3.split("-")[0], pair3.split("-")[1]]
 
-        for i in stable_coins:
-            if pairs_list.count(i) == 2:
-                stable_coin_in_pairs = i
-                stable_coins_check = True
-                break
-
-        # Ensures the beginning and end of pairs_list are both stable coins
-        if (i == pairs_list[0] or i == pairs_list[1] and
-            i == pairs_list[4] or i == pairs_list[5]):
-            right_order_check = True
-
-        #if (pair1.split("-")[0] == pair2.split("-")[0] or 
-        #    pair1.split("-")[0] == pair2.split("-")[1] or 
-        #    pair1.split("-")[1] == pair2.split("-")[0] or 
-        #    pair1.split("-")[1] == pair2.split("-")[1] and
-        #    pair2.split("-")[0] == pair3.split("-")[0] or
-        #    pair2.split("-")[0] == pair3.split("-")[1] or
-        #    pair2.split("-")[1] == pair3.split("-")[0] or
-        #    pair2.split("-")[1] == pair3.split("-")[1]):
-        #    pairs_chain_check = True
-        # Below replaces this ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        if (pairs_list.count(pairs_list[0]) == 2 and
-            pairs_list.count(pairs_list[1]) == 2 and
-            pairs_list.count(pairs_list[2]) == 2 and
-            pairs_list.count(pairs_list[3]) == 2):
-            pairs_chain_check = True
-                    
         if stable_coins_check and right_order_check and pairs_chain_check:
             pair1_asks = pair1_orderbook[pair1]['asks']
             pair1_bids = pair1_orderbook[pair1]['bids']
@@ -90,6 +56,10 @@ def find_tri_arb_path():
                 where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
 
             # Transaction 3
+            print()
+            print(combo)
+            print(where_are_stable_coins)
+            print(where_is_transaction_coin_two)
             where_is_transaction_coin_three = [] # [3, 5]
             if where_is_transaction_coin_two[1] == 2:
                 where_is_transaction_coin_three.append(3)
@@ -179,4 +149,4 @@ if __name__ == "__main__":
     import time
     start_time = time.time() 
     find_tri_arb_path()
-    print(f'Algo took {str(time.time() - start_time)[:8]} seconds')
+    print(f'Algo took {str(time.time() - start_time)[:2]} seconds')
