@@ -42,9 +42,11 @@ def create_catalog():
         pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1]]
 
         # Ensures the stable coin only occurs twice and the stable coin is not in the middle pair
+        num_of_stable_coins = 0
         for i in stable_coins:
             if (pairs_list.count(i) == 2 and 
                 i != pairs_list[2] and i != pairs_list[3]):
+                num_of_stable_coins = num_of_stable_coins + 1
                 stable_coin_in_pairs = i
                 stable_coins_check = True
                 right_order_check = True
