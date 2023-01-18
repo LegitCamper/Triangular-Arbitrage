@@ -24,10 +24,12 @@ def get_tradable_coin_pairs():
 def create_catalog():
     pairs_in_Results = os.listdir(f"{os.getcwd()}/Results/")
     
+    json_output = []
+
     for combo in combinations(get_tradable_coin_pairs(), 3):
-        pair1 = combo[0]
-        pair2 = combo[1]
-        pair3 = combo[2]
+        pair1 = combo[0].split("-")
+        pair2 = combo[1].split("-")
+        pair3 = combo[2].split("-")
 
         # Needs to pass three requirements:
         # 1) 2 pairs need to have stable coins.
@@ -37,33 +39,31 @@ def create_catalog():
         stable_coins_check = False
         right_order_check = False
         pairs_chain_check = False
-        pairs_list = [pair1.split("-")[0], pair1.split("-")[1], pair2.split("-")[0], pair2.split("-")[1], pair3.split("-")[0], pair3.split("-")[1]]
+        pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1]]
 
         # Ensures the stable coin only occurs twice and the stable coin is not in the middle pair
         for i in stable_coins:
-            if pairs_list.count(i) == 2:
+            if (pairs_list.count(i) == 2 and 
+                i != pairs_list[2] and i != pairs_list[3]):
                 stable_coin_in_pairs = i
                 stable_coins_check = True
+                right_order_check = True
+            else:
+                continue
 
-        for i in stable_coins:
-            if i == pairs_list[2] or i == pairs_list[3]:
-                right_order_check = False
-
-        for i in stable_coins:
-            if i != pairs_list[0] or i != pairs_list[1]:
-                right_order_check = False
+        # Skips other checks if stable_coins_check fails
+        if not stable_coins_check:
+            continue
 
         # Ensures the beginning and end of pairs_list are both stable coins
-        try: # catches exception if stable_coin_in_pairs doesnt exist
+        try: # Catches exception that gets raised when stable_coin_in_pairs is not defined
             if (stable_coin_in_pairs == pairs_list[0] or stable_coin_in_pairs == pairs_list[1] and
-                stable_coin_in_pairs == pairs_list[4] or stable_coin_in_pairs == pairs_list[5] and
-                stable_coin_in_pairs != pairs_list[2] or stable_coin_in_pairs != pairs_list[3]):
+                stable_coin_in_pairs == pairs_list[4] or stable_coin_in_pairs == pairs_list[5]):
                 right_order_check = True
             else:
                 continue
         except:
             continue
-
 
         # Ensure the pairs can chain together
         if (pairs_list.count(pairs_list[0]) == 2 and
@@ -74,16 +74,17 @@ def create_catalog():
         else:
             continue
 
-
         if stable_coins_check and right_order_check and pairs_chain_check:
-             pairs_catalog.write(f"\n{pair1}, {pair2}, {pair3}")
+            json_output.append(pairs_list)
+        
+
+    json.dump(json_output, pairs_catalog)
 
 
 if __name__ == "__main__":
-    print('This will create the pair catalog - maybe update the stable coins too (takes 40 minutes to run LOL)')
+    print('This will create the pair catalog - maybe update the stable coins too (takes a couple minutes to run LOL)')
     start_time = time.time()
-    print(f"Start time is: {start_time}")
     create_catalog()
     execution_time = str(time.time() - start_time)
-    print(f"Creating the catalog took {execution_time}")
+    print(f"Creating the catalog took {round(execution_time, 2)} seconds")
 
