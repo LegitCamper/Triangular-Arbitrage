@@ -1,6 +1,7 @@
 import numpy as np
 import json
 import os
+import shutil
 
 
 stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
@@ -22,23 +23,25 @@ def round_value(coin_amount):
     return (int(coin_amount) + int(split_value[1][:8]) / 100000) # math.floor rounds down, math.ceil round up
 
 
+def Read_File(path):
+    shutil.copy(path, f"{os.getcwd()}/TempRead.kupair")
+
+    with open(f"{os.getcwd()}/TempRead.kupair", "r") as f:
+        return json.load(f)
+
+
 def find_tri_arb_path():
     for pairs in pair_catalog:
-        #print(pairs) ## DEBUG
-
         pairs_list = pairs
 
         pair1 = f"{pairs[0]}-{pairs[1]}"
         pair2 = f"{pairs[2]}-{pairs[3]}"
         pair3 = f"{pairs[4]}-{pairs[5]}"
-        
+
         try:
-            with open(f"{os.getcwd()}/Results/{pair1}.kupair") as f:
-                pair1_orderbook = json.load(f)
-            with open(f"{os.getcwd()}/Results/{pair2}.kupair") as f:
-                pair2_orderbook = json.load(f)
-            with open(f"{os.getcwd()}/Results/{pair3}.kupair") as f:
-                pair3_orderbook = json.load(f)
+            pair1_orderbook = Read_File(f"{os.getcwd()}/Results/{pair1}.kupair")
+            pair2_orderbook = Read_File(f"{os.getcwd()}/Results/{pair2}.kupair")
+            pair3_orderbook = Read_File(f"{os.getcwd()}/Results/{pair3}.kupair")
         except:
             continue
 
@@ -97,56 +100,32 @@ def find_tri_arb_path():
             # Transaction 1
             if where_are_stable_coins[0] == 0:
                 if where_are_stable_coins[0] == 'USDT':
-                    if float(pair1_bids[0][1]) >= 5:
-                        coin_amount = (starting_amount_USD / float(pair1_bids[0][0])) * 0.001
-                    else: # if pair1_bids < 5
-                        coin_amount = (float(pair1_bids[0][1]) / float(pair1_bids[0][0])) * 0.001
+                    coin_amount = (starting_amount_USD / float(pair1_bids[4][0])) * 0.001
                 else:
-                    if float(pair1_bids[0][1]) >= 5:
-                        coin_amount = ((starting_amount_USD * 0.001) / float(pair1_bids[0][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
-                    else: # if pair1_bids < 5
-                        coin_amount = ((float(pair1_bids[0][1]) * 0.001) / float(pair1_bids[0][0])) * 0.001
+                    coin_amount = ((starting_amount_USD * 0.001) / float(pair1_bids[4][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
             elif where_are_stable_coins[0] == 1:
                 if where_are_stable_coins[0] == 'USDT':
-                    if float(pair1_asks[0][1]) >= 5:
-                        coin_amount = (starting_amount_USD / float(pair1_asks[0][0])) * 0.001
-                    else: # if pair1_bids < 5
-                        coin_amount = (float(pair1_asks[0][1]) / float(pair1_asks[0][0])) * 0.001
+                    coin_amount = (starting_amount_USD / float(pair1_asks[0][0])) * 0.001
                 else:
-                    if float(pair1_asks[0][1]) >= 5:
-                        coin_amount = ((starting_amount_USD * 0.001) / float(pair1_asks[0][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
-                    else: # if pair1_bids < 5
-                        coin_amount = ((float(pair1_asks[0][1]) * 0.001) / float(pair1_asks[0][0])) * 0.001
+                    coin_amount = ((starting_amount_USD * 0.001) / float(pair1_asks[0][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
             coin_amount = round_value(coin_amount)
             if coin_amount == 0:
                 continue
             
             # Transaction 2
             if where_is_transaction_coin_two[1] == 2:
-               if float(pair2_bids[0][1]) >= 5:
-                    coin_amount = (coin_amount / float(pair2_bids[0][0])) * 0.001
-               else: # if pair1_bids < 5
-                    coin_amount = (float(pair2_bids[0][1]) / float(pair2_bids[0][0])) * 0.001
+                coin_amount = (coin_amount / float(pair2_bids[4][0])) * 0.001
             elif where_is_transaction_coin_two[1] == 3:
-                if float(pair2_asks[0][1]) >= 5:
-                    coin_amount = (coin_amount / float(pair2_asks[0][0])) * 0.001
-                else: # if pair1_bids < 5
-                    coin_amount = (float(pair2_asks[0][1]) / float(pair2_asks[0][0])) * 0.001
+                coin_amount = (coin_amount / float(pair2_asks[0][0])) * 0.001
             coin_amount = round_value(coin_amount)
             if coin_amount == 0:
                 continue
 
             # Transaction 3
             if where_is_transaction_coin_three[1] == 4:
-               if float(pair3_bids[0][1]) >= 5:
-                    coin_amount = (coin_amount / float(pair3_bids[0][0])) * 0.001
-               else: # if pair1_bids < 5
-                    coin_amount = (float(pair3_bids[0][1]) / float(pair3_bids[0][0])) * 0.001
+                coin_amount = (coin_amount / float(pair3_bids[4][0])) * 0.001
             elif where_is_transaction_coin_three[1] == 5:
-                if float(pair3_asks[0][1]) >= 5:
-                    coin_amount = (coin_amount / float(pair3_asks[0][0])) * 0.001
-                else: # if pair1_bids < 5
-                    coin_amount = (float(pair3_asks[0][1]) / float(pair3_asks[0][0])) * 0.001
+                coin_amount = (coin_amount / float(pair3_asks[0][0])) * 0.001
             coin_amount = round_value(coin_amount)
             if coin_amount == 0:
                 continue
@@ -158,9 +137,9 @@ def find_tri_arb_path():
 
             
 
-            if starting_amount_USD < coin_amount:
-                print(f"\nI now have {coin_amount}, which means a net of ${coin_amount-starting_amount_USD}")
-                print("I made money")
+            if starting_amount_USD < coin_amount and "USDC" not in pairs:
+                print(f" \n For pair: {pairs} \n I now have {coin_amount} \n Which means a net of ${coin_amount-starting_amount_USD}")
+                print(" I made money")
 
     # Logic to determine if a path is availibe
 
