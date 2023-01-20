@@ -7,7 +7,7 @@ import time
 
 stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 
-pairs_catalog = open(f"{os.getcwd()}/Triangular_pairs.catalog", 'a')
+pairs_catalog = open(f"{os.getcwd()}/Triangular_pairs.catalog", 'w')
 
 client = Market(url="https://api.kucoin.com")
 
@@ -52,6 +52,9 @@ def create_catalog():
                 right_order_check = True
             else:
                 continue
+    
+        if num_of_stable_coins > 1:
+            continue
 
         # Skips other checks if stable_coins_check fails
         if not stable_coins_check:
@@ -87,6 +90,5 @@ if __name__ == "__main__":
     print('This will create the pair catalog - maybe update the stable coins too (takes a couple minutes to run LOL)')
     start_time = time.time()
     create_catalog()
-    execution_time = str(time.time() - start_time)
-    print(f"Creating the catalog took {round(execution_time, 2)} seconds")
+    print(f"Creating the catalog took {round(time.time() - start_time, 2)} seconds")
 
