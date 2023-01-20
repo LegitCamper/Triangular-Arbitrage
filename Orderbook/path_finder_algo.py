@@ -24,7 +24,7 @@ def round_value(coin_amount):
 
 def find_tri_arb_path():
     for pairs in pair_catalog:
-        print(pairs) ## DEBUG
+        #print(pairs) ## DEBUG
 
         pairs_list = pairs
 
@@ -124,12 +124,12 @@ def find_tri_arb_path():
             # Transaction 2
             if where_is_transaction_coin_two[1] == 2:
                if float(pair2_bids[0][1]) >= 5:
-                    coin_amount = (starting_amount_USD / float(pair2_bids[0][0])) * 0.001
+                    coin_amount = (coin_amount / float(pair2_bids[0][0])) * 0.001
                else: # if pair1_bids < 5
                     coin_amount = (float(pair2_bids[0][1]) / float(pair2_bids[0][0])) * 0.001
             elif where_is_transaction_coin_two[1] == 3:
                 if float(pair2_asks[0][1]) >= 5:
-                    coin_amount = (starting_amount_USD / float(pair2_asks[0][0])) * 0.001
+                    coin_amount = (coin_amount / float(pair2_asks[0][0])) * 0.001
                 else: # if pair1_bids < 5
                     coin_amount = (float(pair2_asks[0][1]) / float(pair2_asks[0][0])) * 0.001
             coin_amount = round_value(coin_amount)
@@ -139,12 +139,12 @@ def find_tri_arb_path():
             # Transaction 3
             if where_is_transaction_coin_three[1] == 4:
                if float(pair3_bids[0][1]) >= 5:
-                    coin_amount = (starting_amount_USD / float(pair3_bids[0][0])) * 0.001
+                    coin_amount = (coin_amount / float(pair3_bids[0][0])) * 0.001
                else: # if pair1_bids < 5
                     coin_amount = (float(pair3_bids[0][1]) / float(pair3_bids[0][0])) * 0.001
             elif where_is_transaction_coin_three[1] == 5:
                 if float(pair3_asks[0][1]) >= 5:
-                    coin_amount = (starting_amount_USD / float(pair3_asks[0][0])) * 0.001
+                    coin_amount = (coin_amount / float(pair3_asks[0][0])) * 0.001
                 else: # if pair1_bids < 5
                     coin_amount = (float(pair3_asks[0][1]) / float(pair3_asks[0][0])) * 0.001
             coin_amount = round_value(coin_amount)
@@ -159,7 +159,7 @@ def find_tri_arb_path():
             
 
             if starting_amount_USD < coin_amount:
-                print(coin_amount)
+                print(f"\nI now have {coin_amount}, which means a net of ${coin_amount-starting_amount_USD}")
                 print("I made money")
 
     # Logic to determine if a path is availibe
