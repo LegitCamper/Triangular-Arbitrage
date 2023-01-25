@@ -20,7 +20,7 @@ def round_value(coin_amount):
     split_value = scientific_to_decimal.split(".")
     if len(split_value) == 1:
         return 0.0
-    return (int(coin_amount) + int(split_value[1][:8]) / 100000) # math.floor rounds down, math.ceil round up
+    return float(f'0.{split_value[1][:8]}') # math.floor rounds down, math.ceil round up
 
 
 def Read_File(path):
@@ -45,12 +45,16 @@ def find_tri_arb_path():
         except:
             continue
 
-        for i in stable_coins:
-            if (pairs_list.count(i) == 2 and 
-                i != pairs_list[2] and i != pairs_list[3]):
-                stable_coin_in_pairs = i
-
-        
+        # Finds what the stable coin is 
+        if pairs_list[0] == pairs_list[4]:
+            stable_coin_in_pairs = pairs_list[0]
+        if pairs_list[0] == pairs_list[5]:
+            stable_coin_in_pairs = pairs_list[0]
+        if pairs_list[1] == pairs_list[4]:
+            ststable_coin_in_pairs = pairs_list[1]
+        if pairs_list[1] == pairs_list[5]:
+            stable_coin_in_pairs = pairs_list[1]
+             
         pair1_asks = pair1_orderbook[pair1]['asks']
         pair1_bids = pair1_orderbook[pair1]['bids']
         pair2_asks = pair2_orderbook[pair2]['asks']
@@ -84,6 +88,10 @@ def find_tri_arb_path():
         elif where_are_stable_coins[1] == 5:
             where_is_transaction_coin_three.append(4)
 
+        #print("\n", pairs_list) ### Debug
+        #print(where_are_stable_coins) ### Debug
+        #print(where_is_transaction_coin_two) ### Debug
+        #print(where_is_transaction_coin_three) ### Debug
 
         if (len(where_are_stable_coins) == 2 and
             len(where_is_transaction_coin_two) == 2 and
@@ -94,7 +102,6 @@ def find_tri_arb_path():
             # Bid is the price buyers are ready to buy at
             # Ask id the price sellers are ready to sell at
             # The coin on the left is what I am either buying of selling
-            # print(int(num) + int(str(num).split(".")[1][:8] / 100000000)) 
 
             # Calculations
             # Transaction 1
@@ -137,9 +144,9 @@ def find_tri_arb_path():
 
             
 
-            if starting_amount_USD < coin_amount and "USDC" not in pairs:
-                print(f" \n For pair: {pairs} \n I now have {coin_amount} \n Which means a net of ${coin_amount-starting_amount_USD}")
-                print(" I made money")
+            if starting_amount_USD < coin_amount:
+                print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+                print("I made money")
 
     # Logic to determine if a path is availibe
 
@@ -149,4 +156,4 @@ if __name__ == "__main__":
     while True:
         start_time = time.time()
         find_tri_arb_path()
-        print(f'Algo took {str(time.time() - start_time)[:8]} seconds')
+        #print(f'Algo took {str(time.time() - start_time)[:8]} seconds') # Disabled so I can see just the Results that were profitable

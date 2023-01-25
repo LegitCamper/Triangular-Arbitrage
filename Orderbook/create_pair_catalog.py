@@ -56,9 +56,24 @@ def create_catalog():
     json.dump(json_output, pairs_catalog)
 
 
+def count_coins_in_catalog():
+    with open(f'/home/sawyer/Documents/GitHub/Triangular-Arbitrage/Orderbook/Triangular_pairs.catalog', 'r') as f:
+        catalog = json.load(f)
+    
+    coins_in_catalog = []
+    for i in catalog:
+        for o in i:
+            if o not in coins_in_catalog:
+                coins_in_catalog.append(o)
+
+    return len(coins_in_catalog)
+
 if __name__ == "__main__":
     print('This will create the pair catalog - maybe update the stable coins too (takes a couple minutes to run LOL)')
     start_time = time.time()
     create_catalog()
-    print(f"Creating the catalog took {round(time.time() - start_time, 2)} seconds")
+    print(f"Creating the catalog took {(round(time.time() - start_time, 2)) / 60} minutes")
+
+    print("\nbelow is the number of coins in catalog (all coins in kucoin is 1247)")
+    print(count_coins_in_catalog())
 
