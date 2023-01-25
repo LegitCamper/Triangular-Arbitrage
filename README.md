@@ -6,5 +6,7 @@ Time spent so far:
 
 
 # Instructions
+- Enter the orderbook direcotry
+- `pip install -r requirements.txt` # installs all the deps
 - `python websocket_spawner.py` # downloads all the orderbooks
 - `python path_finder_algo.py` # will print when it finds a pair chain that makes money
