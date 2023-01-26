@@ -62,31 +62,34 @@ def find_tri_arb_path():
         pair3_asks = pair3_orderbook[pair3]['asks']
         pair3_bids = pair3_orderbook[pair3]['bids']
 
-        # Transaction 1 Check
-        where_are_stable_coins = [] # [0, 4]
-        for index, item in enumerate(pairs_list):
-            if item == stable_coin_in_pairs:
-                where_are_stable_coins.append(index)
+        try: # prevents index errors
+            # Transaction 1 Check
+            where_are_stable_coins = [] # [0, 4]
+            for index, item in enumerate(pairs_list):
+                if item == stable_coin_in_pairs:
+                    where_are_stable_coins.append(index)
 
-        # Transaction 2 Check
-        where_is_transaction_coin_two = [] # [1, 2]
-        if where_are_stable_coins[0] == 0:
-            where_is_transaction_coin_two.append(1)
-            where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
-        elif where_are_stable_coins[0] == 1:
-            where_is_transaction_coin_two.append(0)
-            where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
+            # Transaction 2 Check
+            where_is_transaction_coin_two = [] # [1, 2]
+            if where_are_stable_coins[0] == 0:
+                where_is_transaction_coin_two.append(1)
+                where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
+            elif where_are_stable_coins[0] == 1:
+                where_is_transaction_coin_two.append(0)
+                where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
 
-        # Transaction 3 Check
-        where_is_transaction_coin_three = []
-        if where_is_transaction_coin_two[1] == 2:
-            where_is_transaction_coin_three.append(3)
-        elif where_is_transaction_coin_two[1] == 3:
-            where_is_transaction_coin_three.append(2)
-        if where_are_stable_coins[1] == 4:
-            where_is_transaction_coin_three.append(5)
-        elif where_are_stable_coins[1] == 5:
-            where_is_transaction_coin_three.append(4)
+            # Transaction 3 Check
+            where_is_transaction_coin_three = []
+            if where_is_transaction_coin_two[1] == 2:
+                where_is_transaction_coin_three.append(3)
+            elif where_is_transaction_coin_two[1] == 3:
+                where_is_transaction_coin_three.append(2)
+            if where_are_stable_coins[1] == 4:
+                where_is_transaction_coin_three.append(5)
+            elif where_are_stable_coins[1] == 5:
+                where_is_transaction_coin_three.append(4)
+        except:
+            continue
 
         #print("\n", pairs_list) ### Debug
         #print(where_are_stable_coins) ### Debug
@@ -140,7 +143,7 @@ def find_tri_arb_path():
             # Transaction 4 - If need to exchange back to USDT
             if where_are_stable_coins[0] == 'USDT':
                 coin_amount = coin_amount * 0.001
-            coin_amount = round_value(coin_amount)
+                coin_amount = round_value(coin_amount)
 
             
 
