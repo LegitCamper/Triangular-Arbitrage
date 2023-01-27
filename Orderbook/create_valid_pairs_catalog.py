@@ -1,4 +1,6 @@
 # This script is intended to be ran alone. It will index all the pairs and find the chainable ones
+# It takes quite a while to run so you can compile and run it with:
+# nuitka3-run --quiet --remove-output --output-dir=bin create_valid_pairs_catalog.py
 from itertools import combinations_with_replacement
 from kucoin.client import Market
 import json
@@ -10,7 +12,7 @@ stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 pairs_catalog_path = f"{os.getcwd()}/Triangular_pairs.catalog"
 if os.path.exists(pairs_catalog_path):
     os.remove(pairs_catalog_path)
-pairs_catalog = open(pairs_catalog_path, 'w+')
+pairs_catalog = open(pairs_catalog_path, 'w')
 
 client = Market(url="https://api.kucoin.com")
 
@@ -60,7 +62,7 @@ def create_catalog():
 
     
 def count_coins_in_catalog():
-    catalog = json.load(pairs_catalog )
+    catalog = json.load(pairs_catalog)
     
     coins_in_catalog = []
     for i in catalog:
@@ -71,11 +73,11 @@ def count_coins_in_catalog():
     return len(coins_in_catalog)
 
 if __name__ == "__main__":
-    print('This will create the pair catalog - maybe update the stable coins too (takes a couple minutes to run LOL)')
+    print('This will create the pair catalog (takes a couple minutes to run)')
     start_time = time.time()
     create_catalog()
     print(f"Creating the catalog took {(round(time.time() - start_time, 2)) / 60} minutes")
 
-    print("\nbelow is the number of unique coins in catalog (all coins in kucoin is 1247)")
-    print(count_coins_in_catalog())
+    #print("\nbelow is the number of unique coins in catalog (all coins in kucoin is 1247)")
+    #print(count_coins_in_catalog())
 
