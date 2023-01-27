@@ -57,7 +57,7 @@ class kucoin_orderbook_websocket():
     def on_error(self, ws, error):
         print(f"Thread Number: {self.threadnumber}", "ERROR:", error)
         ws.close()  
-        self.__init__(self.pair_strings, self.first_run)
+        kucoin_orderbook_websocket(self.threadnumber, self.pair_strings)
 
     def on_close(self, ws, close_status_code, close_msg):
         print("### closed ###", f"Thread Number: {self.threadnumber}")
