@@ -32,6 +32,7 @@ def create_catalog():
     json_output = []
     coin_pairs = get_tradable_coin_pairs()
 
+    # Creats all valid combinations with 3 pairs
     for pair1 in coin_pairs:
         for pair2 in coin_pairs:
             for pair3 in coin_pairs:
@@ -58,6 +59,36 @@ def create_catalog():
                         except:
                             continue
 
+    # Creats all valid combinations with 3 pairs
+    for pair1 in coin_pairs:
+        for pair2 in coin_pairs:
+            for pair3 in coin_pairs:
+                for pair4 in coin_pairs:
+                    
+                    pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1], pair4[0], pair4[1]]
+
+                    # Ensure the pairs can chain together
+                    if (pairs_list.count(pairs_list[0]) == 2 and
+                        pairs_list.count(pairs_list[1]) == 2 and
+                        pairs_list.count(pairs_list[2]) == 2 and
+                        pairs_list.count(pairs_list[3]) == 2 and
+                        pairs_list.count(pairs_list[4]) == 2 and
+                        pairs_list.count(pairs_list[5]) == 2):
+
+                        # First and last pair have a stable coin
+                        for i in stable_coins:
+                            if i in pair1 and i in pair4:
+                                i_ = i
+                        
+                        try:
+                            # Ensures the beginning and end of pairs_list are both stable coins
+                            if (i_ == pairs_list[0] or i_ == pairs_list[1] and
+                                i_ == pairs_list[6] or i_ == pairs_list[7]):
+
+                                    json_output.append(pairs_list)
+                        except:
+                            continue
+            
     json.dump(json_output, pairs_catalog)
 
     
