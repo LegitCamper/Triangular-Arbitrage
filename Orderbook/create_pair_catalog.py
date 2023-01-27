@@ -7,7 +7,10 @@ import time
 
 stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 
-pairs_catalog = open(f"{os.getcwd()}/Triangular_pairs.catalog", 'w')
+pairs_catalog_path = f"{os.getcwd()}/Triangular_pairs.catalog"
+if os.path.exists(pairs_catalog_path):
+    os.remove(pairs_catalog_path)
+pairs_catalog = open(pairs_catalog_path, 'w+')
 
 client = Market(url="https://api.kucoin.com")
 
@@ -57,8 +60,7 @@ def create_catalog():
 
 
 def count_coins_in_catalog():
-    with open(f'/home/sawyer/Documents/GitHub/Triangular-Arbitrage/Orderbook/Triangular_pairs.catalog', 'r') as f:
-        catalog = json.load(f)
+    catalog = json.load(pairs_catalog )
     
     coins_in_catalog = []
     for i in catalog:
@@ -74,6 +76,6 @@ if __name__ == "__main__":
     create_catalog()
     print(f"Creating the catalog took {(round(time.time() - start_time, 2)) / 60} minutes")
 
-    print("\nbelow is the number of coins in catalog (all coins in kucoin is 1247)")
+    print("\nbelow is the number of unique coins in catalog (all coins in kucoin is 1247)")
     print(count_coins_in_catalog())
 
