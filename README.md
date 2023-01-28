@@ -5,8 +5,9 @@ Time spent so far:
 [![wakatime](https://wakatime.com/badge/user/667e8788-dc0e-4308-a0a6-3580fee39a98/project/8ae1952d-d23e-4839-afdc-603383150620.svg)](https://wakatime.com/badge/user/667e8788-dc0e-4308-a0a6-3580fee39a98/project/8ae1952d-d23e-4839-afdc-603383150620)
 
 
-# Instructions
+
+# Instructions (Linux Only)
 - Enter the orderbook direcotry
-- `pip install -r requirements.txt` # installs all the deps
-- `python websocket_spawner.py` # downloads all the orderbooks
-- `python path_finder_algo.py` # will print when it finds a pair chain that makes money
+- `chmod +x build_binaries.sh && ./build_binaries.sh` - Builds binaries
+- `cd bin && chmod +x run.sh && ./run.sh` - runs binaries
+- Wait until you find an abritrage
