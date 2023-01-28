@@ -32,15 +32,17 @@ def get_tradable_coin_pairs():
             coin_pairs.append(i["symbol"].split("-"))
     return coin_pairs
 
-def valid_combination(count, coin_pairs, first_pair, pair2):
+coin_pairs = get_tradable_coin_pairs()
+
+def valid_combination_3(pair1):
     # Needs to pass three requirements:
     # 1) 2 pairs need to have stable coins.
     # 2) the stable coins must only be in the first and third pair
     # 3) I need to be able to chain together the 3 pairs USDT-BTC->BTC-ETH->ETH-USDT
-    if count == 3:
-        for last_pair in coin_pairs:
+    for pair2 in coin_pairs:
+        for pair3 in coin_pairs:
 
-            pairs_list = [first_pair[0], first_pair[1], pair2[0], pair2[1], last_pair[0], last_pair[1]]
+            pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1]]
 
             # Ensure the pairs can chain together
             if (pairs_list.count(pairs_list[0]) == 2 and
@@ -50,7 +52,7 @@ def valid_combination(count, coin_pairs, first_pair, pair2):
 
                 # First and last pair have a stable coin
                 for i in stable_coins:
-                    if i in first_pair and i in last_pair:
+                    if i in pair1 and i in pair3:
                         i_ = i
                         
                 try:
@@ -62,24 +64,22 @@ def valid_combination(count, coin_pairs, first_pair, pair2):
                 except:
                     pass
 
-def create_catalog():
-    coin_pairs = get_tradable_coin_pairs()
 
+def create_catalog():
     # Creats all valid combinations with 3 pairs
     for pair1 in coin_pairs:
-        for pair2 in coin_pairs:
-
-            #try:
-            #    # ensurs the queue always stays full
-            #    while True:
-            #        thread_queue.put(Thread(target=valid_combination, args=(3, coin_pairs, pair1, pair2,), daemon=True).start(), block=False)
-            #except queue.Full:
-            #    pass 
-            #except queue.Empty:
-            #    print('finished')
+    
+        try:
+            # ensurs the queue always stays full
+            while True:
+                thread_queue.put(Thread(target=valid_combination_3, args=(coin_pairs, pair1,), daemon=True).start(), block=False)
+        except queue.Full:
+            pass 
+        except queue.Empty:
+            print('finished')
                  
 
-            valid_combination(3, coin_pairs, pair1, pair2)
+            #valid_combination(3, coin_pairs, pair1, pair2)
 
     # Writes the results to Triangular_pairs.catalog
     json.dump(catalog_output, pairs_catalog)
