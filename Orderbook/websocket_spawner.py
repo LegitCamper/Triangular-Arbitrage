@@ -1,7 +1,5 @@
-from itertools import combinations
 from kucoin.client import Market
 from threading import Thread
-import json
 import subprocess
 import os
 from path_finder_algo import find_tri_arb_path
@@ -16,7 +14,6 @@ client = Market(url="https://api.kucoin.com")
 
 def get_tradable_coin_pairs():
     coin_pairs = []
-    count = 0
     for i in client.get_symbol_list():
         if i["enableTrading"]:
             coin_pairs.append(i["symbol"])
@@ -53,7 +50,11 @@ if __name__ == "__main__":
         
         # Runs websockets in a thread loop forever
         Thread(target=thread_the_process, args=(counter, coin_pairs_string)).start()
-
+    
     # Determines if there is an Arbitrage
-    #Thread(target=find_arb, args=()).Start()    
+    #Thread(target=find_arb, args=()).Start()
+    import time
+    time.sleep(60) # lets the websocket data populate
+    while True:
+        find_tri_arb_path()
 

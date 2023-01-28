@@ -8,7 +8,7 @@ stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 
 pair_catalog_file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
 
-starting_amount_USD = 5
+starting_amount_USD = 100
 
 pair_catalog = json.load(pair_catalog_file)
 
@@ -33,7 +33,7 @@ def Read_File(path):
 def find_tri_arb_path():
     for pairs in pair_catalog:
         pairs_list = pairs
-
+        
         pair1 = f"{pairs[0]}-{pairs[1]}"
         pair2 = f"{pairs[2]}-{pairs[3]}"
         pair3 = f"{pairs[4]}-{pairs[5]}"
@@ -155,8 +155,5 @@ def find_tri_arb_path():
 
 
 if __name__ == "__main__":
-    import time
     while True:
-        start_time = time.time()
         find_tri_arb_path()
-        #print(f'Algo took {str(time.time() - start_time)[:8]} seconds') # Disabled so I can see just the Results that were profitable
