@@ -52,9 +52,8 @@ if __name__ == "__main__":
         Thread(target=thread_the_process, args=(counter, coin_pairs_string)).start()
     
     # Determines if there is an Arbitrage
-    #Thread(target=find_arb, args=()).Start()
-    import time
-    time.sleep(60) # lets the websocket data populate
-    while True:
-        find_tri_arb_path()
+    #import time
+    #time.sleep(60) # lets the websocket data populate
+    #while True:
+    #    find_tri_arb_path()
 

@@ -33,7 +33,7 @@ def Read_File(path):
 def find_tri_arb_path():
     for pairs in pair_catalog:
         pairs_list = pairs
-        
+               
         pair1 = f"{pairs[0]}-{pairs[1]}"
         pair2 = f"{pairs[2]}-{pairs[3]}"
         pair3 = f"{pairs[4]}-{pairs[5]}"
