@@ -9,5 +9,5 @@ Time spent so far:
 # Instructions (Linux Only)
 - Enter the orderbook direcotry
 - `chmod +x build_binaries.sh && ./build_binaries.sh` - Builds binaries
-- `cd bin && chmod +x run.sh && ./run.sh` - runs binaries
+- `cd bin && chmod +x run.sh && ./run.sh` - Runs binaries
 - Wait until you find an abritrage
