@@ -1,34 +1,44 @@
-from kucoin.client import Market
+#from kucoin.client import Market
+import json
 from threading import Thread
 import subprocess
 import os
-from path_finder_algo import find_tri_arb_path
 
 default_coin = "USDT"
 stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"] #"PAX"
-kucoin_fees = 0.1
+
+#client = Market(url="https://api.kucoin.com")
 
 
-client = Market(url="https://api.kucoin.com")
+#def get_tradable_coin_pairs():
+#    coin_pairs = []
+#    for i in client.get_symbol_list():
+#        if i["enableTrading"]:
+#            coin_pairs.append(i["symbol"])
+#    return coin_pairs
 
 
+#def get_all_coins():
+#    coins = []
+#    for i in client.get_currencies():
+#        coins.append(i["currency"])
+#    return coins
+
+
+# Only download the coins that I will be using
+# AKA the ones in Triangular_pair.catalog
 def get_tradable_coin_pairs():
+    file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
     coin_pairs = []
-    for i in client.get_symbol_list():
-        if i["enableTrading"]:
-            coin_pairs.append(i["symbol"])
+    for i in json.load(file):
+        for o in i:
+            if o not in coin_pairs:
+                coin_pairs.append(o)
     return coin_pairs
 
 
-def get_all_coins():
-    coins = []
-    for i in client.get_currencies():
-        coins.append(i["currency"])
-    return coin
-
-
 def thread_the_process(counter, coin_pairs_string):
-    p = subprocess.Popen(["python", f"{os.getcwd()}/websockets.py", f"{counter}", f"{coin_pairs_string}"])
+    p = subprocess.Popen([f"{os.getcwd()}/websockets.bin", f"{counter}", f"{coin_pairs_string}"])
     p.wait()
 
 
@@ -50,10 +60,4 @@ if __name__ == "__main__":
         
         # Runs websockets in a thread loop forever
         Thread(target=thread_the_process, args=(counter, coin_pairs_string)).start()
-    
-    # Determines if there is an Arbitrage
-    #import time
-    #time.sleep(60) # lets the websocket data populate
-    #while True:
-    #    find_tri_arb_path()
 
