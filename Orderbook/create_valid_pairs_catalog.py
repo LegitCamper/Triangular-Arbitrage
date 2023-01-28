@@ -1,8 +1,11 @@
 # This script is intended to be ran alone. It will index all the pairs and find the chainable ones
 # It takes quite a while to run so you can compile and run it with:
-# nuitka3-run --quiet --remove-output --output-dir=bin create_valid_pairs_catalog.py
-from itertools import combinations_with_replacement
+# nuitka3-run --quiet --remove-output --output-dir=bin --clang create_valid_pairs_catalog.py
+import queue
 from kucoin.client import Market
+from threading import Thread
+from queue import Queue
+import multiprocessing
 import json
 import os
 import time
@@ -14,6 +17,11 @@ if os.path.exists(pairs_catalog_path):
     os.remove(pairs_catalog_path)
 pairs_catalog = open(pairs_catalog_path, 'w')
 
+catalog_output = []
+
+num_threads = multiprocessing.cpu_count()
+thread_queue = Queue(maxsize=num_threads)
+
 client = Market(url="https://api.kucoin.com")
 
 
@@ -21,50 +29,72 @@ def get_tradable_coin_pairs():
     coin_pairs = []
     for i in client.get_symbol_list():
         if i["enableTrading"]:
-            coin_pairs.append(i["symbol"])
+            coin_pairs.append(i["symbol"].split("-"))
     return coin_pairs
 
-# Needs to pass three requirements:
-# 1) 2 pairs need to have stable coins.
-# 2) the stable coins must only be in the first and third pair
-# 3) I need to be able to chain together the 3 pairs USDT-BTC->BTC-ETH->ETH-USDT
+def valid_combination(count, coin_pairs, first_pair, pair2):
+    # Needs to pass three requirements:
+    # 1) 2 pairs need to have stable coins.
+    # 2) the stable coins must only be in the first and third pair
+    # 3) I need to be able to chain together the 3 pairs USDT-BTC->BTC-ETH->ETH-USDT
+    if count == 3:
+        for last_pair in coin_pairs:
+
+            pairs_list = [first_pair[0], first_pair[1], pair2[0], pair2[1], last_pair[0], last_pair[1]]
+
+            # Ensure the pairs can chain together
+            if (pairs_list.count(pairs_list[0]) == 2 and
+                pairs_list.count(pairs_list[1]) == 2 and
+                pairs_list.count(pairs_list[2]) == 2 and
+                pairs_list.count(pairs_list[3]) == 2):
+
+                # First and last pair have a stable coin
+                for i in stable_coins:
+                    if i in first_pair and i in last_pair:
+                        i_ = i
+                        
+                try:
+                    # Ensures the beginning and end of pairs_list are both stable coins
+                    if (i_ == pairs_list[0] or i_ == pairs_list[1] and
+                        i_ == pairs_list[4] or i_ == pairs_list[5]):
+
+                        catalog_output.append(pairs_list)
+                except:
+                    pass
+
 def create_catalog():
-    json_output = []
     coin_pairs = get_tradable_coin_pairs()
 
     # Creats all valid combinations with 3 pairs
     for pair1 in coin_pairs:
         for pair2 in coin_pairs:
-            for pair3 in coin_pairs:
 
-                pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1]]
+            #try:
+            #    # ensurs the queue always stays full
+            #    while True:
+            #        thread_queue.put(Thread(target=valid_combination, args=(3, coin_pairs, pair1, pair2,), daemon=True).start(), block=False)
+            #except queue.Full:
+            #    pass 
+            #except queue.Empty:
+            #    print('finished')
+                 
 
-                # Ensure the pairs can chain together
-                if (pairs_list.count(pairs_list[0]) == 2 and
-                    pairs_list.count(pairs_list[1]) == 2 and
-                    pairs_list.count(pairs_list[2]) == 2 and
-                    pairs_list.count(pairs_list[3]) == 2):
+            valid_combination(3, coin_pairs, pair1, pair2)
 
-                        # First and last pair have a stable coin
-                        for i in stable_coins:
-                            if i in pair1 and i in pair3:
-                                i_ = i
-                        
-                        try:
-                            # Ensures the beginning and end of pairs_list are both stable coins
-                            if (i_ == pairs_list[0] or i_ == pairs_list[1] and
-                                i_ == pairs_list[4] or i_ == pairs_list[5]):
+    # Writes the results to Triangular_pairs.catalog
+    json.dump(catalog_output, pairs_catalog)
 
-                                    json_output.append(pairs_list)
-                        except:
-                            continue
-
+def nan():
     # Creats all valid combinations with 3 pairs
     for pair1 in coin_pairs:
         for pair2 in coin_pairs:
             for pair3 in coin_pairs:
                 for pair4 in coin_pairs:
-                    
+                   
+                    #pair1 = pair1.split(".")
+                    #pair1 = pair1.split(".")
+
+
                     pairs_list = [pair1[0], pair1[1], pair2[0], pair2[1], pair3[0], pair3[1], pair4[0], pair4[1]]
 
                     # Ensure the pairs can chain together
@@ -85,23 +115,10 @@ def create_catalog():
                             if (i_ == pairs_list[0] or i_ == pairs_list[1] and
                                 i_ == pairs_list[6] or i_ == pairs_list[7]):
 
-                                    json_output.append(pairs_list)
+                                    json.dump(pairs_list, pairs_catalog)
                         except:
                             continue
-            
-    json.dump(json_output, pairs_catalog)
 
-    
-def count_coins_in_catalog():
-    catalog = json.load(pairs_catalog)
-    
-    coins_in_catalog = []
-    for i in catalog:
-        for o in i:
-            if o not in coins_in_catalog:
-                coins_in_catalog.append(o)
-
-    return len(coins_in_catalog)
 
 if __name__ == "__main__":
     print('This will create the pair catalog (takes a couple minutes to run)')
