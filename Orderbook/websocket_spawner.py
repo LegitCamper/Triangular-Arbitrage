@@ -38,7 +38,6 @@ def get_tradable_coin_pairs():
 
 
 def thread_the_process(counter, coin_pairs_string):
-    print(["python", f"{os.getcwd()}/websockets.py", f"{counter}", f"{coin_pairs_string}"])
     p = subprocess.Popen([f"{os.getcwd()}/websockets.bin", f"{counter}", f"{coin_pairs_string}"])
     p.wait()
 
