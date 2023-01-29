@@ -3,6 +3,19 @@ import json
 import os
 import shutil
 
+# Import Logtail client library and default logging library
+from logtail import LogtailHandler
+import logging
+
+# Create handler
+handler = LogtailHandler(source_token="WR8JnZFD6BdbokXDg7gQBWRF")
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.handlers = []
+logger.setLevel(logging.DEBUG) # Set minimal log level
+logger.addHandler(handler) # asign handler to logger
+
 
 stable_coins = ["USDT", "TUSD", "BUSD", "USDC", "DAI"]
 
@@ -148,8 +161,8 @@ def find_tri_arb_path():
             
 
             if starting_amount_USD < coin_amount:
-                print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
-                print("I made money")
+                logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+                logger.info("I made money")
 
 
 if __name__ == "__main__":
