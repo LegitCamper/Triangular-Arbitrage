@@ -31,13 +31,14 @@ def get_tradable_coin_pairs():
     file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
     coin_pairs = []
     for i in json.load(file):
-        for o in i:
-            if o not in coin_pairs:
-                coin_pairs.append(o)
+        coin_pairs.append(f"{i[0]}-{i[1]}")
+        coin_pairs.append(f"{i[2]}-{i[3]}")
+        coin_pairs.append(f"{i[4]}-{i[5]}")
     return coin_pairs
 
 
 def thread_the_process(counter, coin_pairs_string):
+    print(["python", f"{os.getcwd()}/websockets.py", f"{counter}", f"{coin_pairs_string}"])
     p = subprocess.Popen([f"{os.getcwd()}/websockets.bin", f"{counter}", f"{coin_pairs_string}"])
     p.wait()
 

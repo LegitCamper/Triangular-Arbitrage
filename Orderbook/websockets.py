@@ -1,7 +1,5 @@
 #from filelock import Timeout, FileLock
 import websocket, ssl
-import _thread
-import time
 import rel
 import sys
 import requests

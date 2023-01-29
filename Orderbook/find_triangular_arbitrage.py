@@ -51,7 +51,7 @@ def find_tri_arb_path():
         if pairs_list[0] == pairs_list[5]:
             stable_coin_in_pairs = pairs_list[0]
         if pairs_list[1] == pairs_list[4]:
-            ststable_coin_in_pairs = pairs_list[1]
+            stable_coin_in_pairs = pairs_list[1]
         if pairs_list[1] == pairs_list[5]:
             stable_coin_in_pairs = pairs_list[1]
              
@@ -150,8 +150,6 @@ def find_tri_arb_path():
             if starting_amount_USD < coin_amount:
                 print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
                 print("I made money")
-
-    # Logic to determine if a path is availibe
 
 
 if __name__ == "__main__":

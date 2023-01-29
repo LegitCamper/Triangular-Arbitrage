@@ -2,3 +2,5 @@
 *.kupair
 *.pyc
 *.bin
+Orderbook/bin/Triangular_pairs.catalog
+*.catalog
