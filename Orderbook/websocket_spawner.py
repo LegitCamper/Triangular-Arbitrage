@@ -34,7 +34,7 @@ def get_tradable_coin_pairs():
         coin_pairs.append(f"{i[0]}-{i[1]}")
         coin_pairs.append(f"{i[2]}-{i[3]}")
         coin_pairs.append(f"{i[4]}-{i[5]}")
-    return coin_pairs
+    return list(set(coin_pairs))
 
 
 def thread_the_process(counter, coin_pairs_string):
