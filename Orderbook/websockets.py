@@ -6,6 +6,7 @@ import requests
 import random
 import json
 import os
+import time
 
 
 def write_coin_pairs(pair, data):
@@ -26,13 +27,12 @@ def get_new_proxy():
     for i in range(len(response)):
         response[i] = response[i].split(":")
     return response[:-1]
-proxies = get_new_proxy()
 
 
 class kucoin_orderbook_websocket():
     def __init__(self, threadnumber, pair_strings):
         self.threadnumber = threadnumber
-        self.proxy = proxies[random.randint(0, len(proxies)-1)]
+        self.proxy = get_new_proxy([random.randint(0, len(proxies)-1)])
         self.kucoin_auth = requests.post('https://api.kucoin.com/api/v1/bullet-public', proxies={'http': f'http://{self.proxy[0]}:{self.proxy[1]}'}).json()['data']
         self.endpoint_data = self.kucoin_auth['instanceServers'][0]
         self.pair_strings = pair_strings
@@ -54,11 +54,14 @@ class kucoin_orderbook_websocket():
 
     def on_error(self, ws, error):
         print(f"Thread Number: {self.threadnumber}", "ERROR:", error)
-        ws.close()  
+        ws.close()
+        time.sleep(60)
         kucoin_orderbook_websocket(self.threadnumber, self.pair_strings)
 
     def on_close(self, ws, close_status_code, close_msg):
-        print("### closed ###", f"Thread Number: {self.threadnumber}")
+        print(f"Thread Number: {self.threadnumber} Closed connection")
+        time.sleep(60)
+        kucoin_orderbook_websocket(self.threadnumber, self.pair_strings)
 
     def on_open(self, ws):
         depth=5

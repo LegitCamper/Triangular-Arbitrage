@@ -32,8 +32,8 @@ def round_value(coin_amount):
     scientific_to_decimal = np.format_float_positional(coin_amount, trim='-')
     split_value = scientific_to_decimal.split(".")
     if len(split_value) == 1:
-        return 0.0
-    return float(f'0.{split_value[1][:8]}') # math.floor rounds down, math.ceil round up
+        return float(split_value[0])
+    return float(f'{split_value[0]}.{split_value[1][:10]}') # math.floor rounds down, math.ceil round up
 
 
 def Read_File(path):
@@ -122,47 +122,32 @@ def find_tri_arb_path():
             # Calculations
             # Transaction 1
             if where_are_stable_coins[0] == 0:
-                if where_are_stable_coins[0] == 'USDT':
-                    coin_amount = (starting_amount_USD / float(pair1_bids[4][0])) * 0.001
-                else:
-                    coin_amount = ((starting_amount_USD * 0.001) / float(pair1_bids[4][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
+                coin_amount = starting_amount_USD * float(pair1_bids[0][0])
             elif where_are_stable_coins[0] == 1:
-                if where_are_stable_coins[0] == 'USDT':
-                    coin_amount = (starting_amount_USD / float(pair1_asks[0][0])) * 0.001
-                else:
-                    coin_amount = ((starting_amount_USD * 0.001) / float(pair1_asks[0][0])) * 0.001 # Accounts for purchases from UTDT to USDC ex.
-            coin_amount = round_value(coin_amount)
-            if coin_amount == 0:
-                continue
+                coin_amount = starting_amount_USD / float(pair1_asks[0][0])
             
             # Transaction 2
             if where_is_transaction_coin_two[1] == 2:
-                coin_amount = (coin_amount / float(pair2_bids[4][0])) * 0.001
+                coin_amount = coin_amount * float(pair2_bids[0][0])
             elif where_is_transaction_coin_two[1] == 3:
-                coin_amount = (coin_amount / float(pair2_asks[0][0])) * 0.001
-            coin_amount = round_value(coin_amount)
-            if coin_amount == 0:
-                continue
+                coin_amount = coin_amount / float(pair2_asks[0][0])
 
             # Transaction 3
             if where_is_transaction_coin_three[1] == 4:
-                coin_amount = (coin_amount / float(pair3_bids[4][0])) * 0.001
+                coin_amount = coin_amount * float(pair3_bids[0][0])
             elif where_is_transaction_coin_three[1] == 5:
-                coin_amount = (coin_amount / float(pair3_asks[0][0])) * 0.001
-            coin_amount = round_value(coin_amount)
-            if coin_amount == 0:
-                continue
+                coin_amount = coin_amount / float(pair3_asks[0][0])
 
             # Transaction 4 - If need to exchange back to USDT
-            if where_are_stable_coins[0] == 'USDT':
-                coin_amount = coin_amount * 0.001
-                coin_amount = round_value(coin_amount)
+            if where_are_stable_coins[0] != 'USDT':
+                coin_amount = round_value(coin_amount - (coin_amount * 0.005)) # 0.5% fees
+            else:
+                coin_amount = round_value(coin_amount - (coin_amount * 0.003)) # 0.3% fees
 
-            
+            coin_amount = coin_amount * 1000 # fixes place value ie. 0.0987 -> 99.87
 
             if starting_amount_USD < coin_amount:
                 logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
-                logger.info("I made money")
 
 
 if __name__ == "__main__":
