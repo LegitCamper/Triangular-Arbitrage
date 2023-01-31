@@ -2,6 +2,7 @@ import numpy as np
 import json
 import os
 import shutil
+import time
 
 # Import Logtail client library and default logging library
 from logtail import LogtailHandler
@@ -144,8 +145,33 @@ def find_tri_arb_path():
             else:
                 coin_amount = round_value(coin_amount - (coin_amount * 0.003)) # 0.3% fees
 
-            if starting_amount_USD < coin_amount:
-                print(coin_amount)
+            if (coin_amount - starting_amount_USD) >= 5:
+                print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+                if "USDT" in pair1: # It starts with USDT so its easy
+
+                    if where_are_stable_coins[0] == 0:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair1} sell {starting_amount_USD} {float(pair1_bids[0][0])}")
+                        coin_amount = starting_amount_USD * float(pair1_bids[0][0])
+                    elif where_are_stable_coins[0] == 1:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair1} buy {starting_amount_USD} {float(pair1_asks[0][0])}")
+                        coin_amount = starting_amount_USD / float(pair1_asks[0][0])
+            
+                    if where_is_transaction_coin_two[1] == 2:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair2} sell {coin_amount} {float(pair2_bids[0][0])}")
+                        coin_amount = coin_amount * float(pair2_bids[0][0])
+                    elif where_is_transaction_coin_two[1] == 3:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair2} buy {coin_amount} {float(pair2_asks[0][0])}")
+                        coin_amount = coin_amount / float(pair2_asks[0][0])
+
+                    if where_is_transaction_coin_three[1] == 4:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair3} sell {coin_amount} {float(pair3_bids[0][0])}")
+                    elif where_is_transaction_coin_three[1] == 5:
+                        os.system(f"{os.getcwd()}/execute_trades.bin {pair3} buy {coin_amount} {float(pair3_asks[0][0])}")
+
+                    #os.system(f"{os.cwd}/execute_trades.bin {pair1} {} {} {}")
+                    #os.system(f"{os.cwd}/execute_trades.bin {pair2} {} {} {}")
+                    #os.system(f"{os.cwd}/execute_trades.bin {pair3} {} {} {}")
+                    time.sleep(20) 
                 #logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
 
 

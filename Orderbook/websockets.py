@@ -32,7 +32,8 @@ def get_new_proxy():
 class kucoin_orderbook_websocket():
     def __init__(self, threadnumber, pair_strings):
         self.threadnumber = threadnumber
-        self.proxy = get_new_proxy([random.randint(0, len(proxies)-1)])
+        self.proxy = get_new_proxy()
+        self.proxy = self.proxy[random.randint(0, len(self.proxy)-1)]
         self.kucoin_auth = requests.post('https://api.kucoin.com/api/v1/bullet-public', proxies={'http': f'http://{self.proxy[0]}:{self.proxy[1]}'}).json()['data']
         self.endpoint_data = self.kucoin_auth['instanceServers'][0]
         self.pair_strings = pair_strings
