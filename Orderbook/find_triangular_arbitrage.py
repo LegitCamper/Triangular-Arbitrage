@@ -144,10 +144,9 @@ def find_tri_arb_path():
             else:
                 coin_amount = round_value(coin_amount - (coin_amount * 0.003)) # 0.3% fees
 
-            coin_amount = coin_amount * 1000 # fixes place value ie. 0.0987 -> 99.87
-
             if starting_amount_USD < coin_amount:
-                logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+                print(coin_amount)
+                #logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
 
 
 if __name__ == "__main__":
