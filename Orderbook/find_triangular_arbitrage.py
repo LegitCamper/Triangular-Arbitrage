@@ -150,28 +150,25 @@ def find_tri_arb_path():
                 if "USDT" in pair1: # It starts with USDT so its easy
 
                     if where_are_stable_coins[0] == 0:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair1} sell {starting_amount_USD} {float(pair1_bids[0][0])}")
+                        os.system(f"echo '{pair1} sell {starting_amount_USD} {float(pair1_bids[0][0])}' >> {os.getcwd()/trades.pipe}")
                         coin_amount = starting_amount_USD * float(pair1_bids[0][0])
                     elif where_are_stable_coins[0] == 1:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair1} buy {starting_amount_USD} {float(pair1_asks[0][0])}")
+                        os.system(f"echo '{pair1} buy {starting_amount_USD} {float(pair1_asks[0][0])}' >> {os.getcwd()/trades.pipe}")
                         coin_amount = starting_amount_USD / float(pair1_asks[0][0])
             
                     if where_is_transaction_coin_two[1] == 2:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair2} sell {coin_amount} {float(pair2_bids[0][0])}")
+                        os.system(f"echo '{pair2} sell {coin_amount} {float(pair2_bids[0][0])}' >> {os.getcwd()/trades.pipe}")
                         coin_amount = coin_amount * float(pair2_bids[0][0])
                     elif where_is_transaction_coin_two[1] == 3:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair2} buy {coin_amount} {float(pair2_asks[0][0])}")
+                        os.system(f"echp '{pair2} buy {coin_amount} {float(pair2_asks[0][0])}' >> {os.getcwd()/trades.pipe}")
                         coin_amount = coin_amount / float(pair2_asks[0][0])
 
                     if where_is_transaction_coin_three[1] == 4:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair3} sell {coin_amount} {float(pair3_bids[0][0])}")
+                        os.system(f"echo '{pair3} sell {coin_amount} {float(pair3_bids[0][0])} >> {os.getcwd()/trades.pipe}")
                     elif where_is_transaction_coin_three[1] == 5:
-                        os.system(f"{os.getcwd()}/execute_trades.bin {pair3} buy {coin_amount} {float(pair3_asks[0][0])}")
+                        os.system(f"echo '{pair3} buy {coin_amount} {float(pair3_asks[0][0])}' >> {os.getcwd()/trades.pipe}")
 
-                    #os.system(f"{os.cwd}/execute_trades.bin {pair1} {} {} {}")
-                    #os.system(f"{os.cwd}/execute_trades.bin {pair2} {} {} {}")
-                    #os.system(f"{os.cwd}/execute_trades.bin {pair3} {} {} {}")
-                    time.sleep(20) 
+                    time.sleep(5) # Avoids being rate limited 
                 #logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
 
 

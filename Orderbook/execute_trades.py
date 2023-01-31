@@ -1,8 +1,14 @@
 # Will execute trades when finds arbitrages
 
-import sys
+import os
 
-# I ideally would use websocets, but i'll use rest for now
+FIFO = f'{os.getcwd()}/trades.pipe'
+
+try:
+    os.mkfifo(FIFO)
+except:
+    os.remove(FIFO)
+    os.mkfifo(FIFO)
 
 api_key = '63b103c041a5330001d22229'
 api_secret = '5b966871-aa93-4507-b31e-041606ca2fad'
@@ -14,6 +20,13 @@ from kucoin.client import Trade
 client = Trade(api_key, api_secret, api_passphrase, is_sandbox=True) # # Sandbox
 
 # place a limit buy order
-#                               Place order with the following arguments Pair, Buy/Sell, Amount, Price
-order_id = client.create_limit_order(sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4]))
+with open(FIFO) as fifo:
+    while True:
+        data = fifo.read()
+        if data != "":
+            
+            data = data.split(" ")
+
+            #                               Place order with the following arguments Pair, Buy/Sell, Amount, Price
+            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))
 
