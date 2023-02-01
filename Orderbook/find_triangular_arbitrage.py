@@ -168,7 +168,7 @@ def find_tri_arb_path():
                     elif where_is_transaction_coin_three[1] == 5:
                         os.system(f"echo '{pair3} buy {coin_amount} {float(pair3_asks[0][0])}' >> {os.getcwd()}/trades.pipe")
 
-                    time.sleep(5) # Avoids being rate limited 
+                    #time.sleep(5) # Avoids being rate limited 
                 #logger.info(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
 
 
