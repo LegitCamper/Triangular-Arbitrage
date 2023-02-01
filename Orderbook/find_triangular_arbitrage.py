@@ -145,7 +145,7 @@ def find_tri_arb_path():
             else:
                 coin_amount = round_value(coin_amount - (coin_amount * 0.003)) # 0.3% fees
 
-            if (coin_amount - starting_amount_USD) >= 1:
+            if coin_amount > starting_amount_USD:
                 print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
                 if "USDT" in pair1: # It starts with USDT so its easy
 
