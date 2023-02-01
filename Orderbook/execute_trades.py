@@ -1,5 +1,6 @@
 # Will execute trades when finds arbitrages
 
+from tenacity import retry
 import os
 
 FIFO = f'{os.getcwd()}/trades.pipe'
@@ -19,6 +20,11 @@ from kucoin.client import Trade
 #client = Trade(key='', secret='', passphrase='', is_sandbox=False, url='') # Real
 client = Trade(api_key, api_secret, api_passphrase, is_sandbox=True) # # Sandbox
 
+@retry(stop=(stop_after_delay(10) | stop_after_attempt(5)))
+def make_order(data):
+    # Place order with the following arguments Pair, Buy/Sell, Amount, Price
+    client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))
+
 # place a limit buy order
 with open(FIFO) as fifo:
     while True:
@@ -27,6 +33,4 @@ with open(FIFO) as fifo:
             
             data = data.split(" ")
 
-            #                               Place order with the following arguments Pair, Buy/Sell, Amount, Price
-            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))
-
+            make_order(data)
