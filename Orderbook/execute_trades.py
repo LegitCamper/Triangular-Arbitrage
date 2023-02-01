@@ -1,6 +1,6 @@
 # Will execute trades when finds arbitrages
 
-from tenacity import retry
+from tenacity import retry, stop_after_delay, stop_after_attempt
 import os
 
 FIFO = f'{os.getcwd()}/trades.pipe'
@@ -25,6 +25,7 @@ def make_order(data):
     # Place order with the following arguments Pair, Buy/Sell, Amount, Price
     client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))
 
+
 # place a limit buy order
 with open(FIFO) as fifo:
     while True:
@@ -32,5 +33,7 @@ with open(FIFO) as fifo:
         if data != "":
             
             data = data.split(" ")
+            # Removes Newline from last item
+            data[3] = data[3].replace("\n", "")
 
             make_order(data)
