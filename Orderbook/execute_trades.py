@@ -1,8 +1,7 @@
 # Will execute trades when finds arbitrages
 
-import numpy as np
 from tenacity import retry
-from tenacity.stop import stop_after_delay, stop_after_attempt
+from tenacity.stop import stop_after_attempt
 import time
 import os
 
@@ -29,7 +28,6 @@ restricted_pairs = []
 def make_order(data):
     try:
         if data[0] not in restricted_pairs:
-            print(data[0], data[1], float(data[2]), float(data[3]))
             # Place order with the following arguments Pair, Buy/Sell, Amount, Price
             client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))
     except Exception as e:
@@ -45,12 +43,15 @@ def make_order(data):
 
 # place a limit buy order
 with open(FIFO) as fifo:
+    print("Pair  Side  Size  Price")
     while True:
-        data = fifo.read()
-        if data != "":
+        for line in fifo:
+            if line != "":
 
-            data = data.split(" ")
-            # Removes Newline from last item
-            data[3] = data[3].split("\n")[0]
+                data = line.split(" ")
 
-            make_order(data)
+                # Removes Newline from last item
+                data[3] = data[3].split("\n")[0]
+
+                print(data)
+                make_order(data)
