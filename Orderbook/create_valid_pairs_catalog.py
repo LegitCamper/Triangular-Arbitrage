@@ -48,7 +48,9 @@ def valid_combination_3(pair1):
             if (pairs_list.count(pairs_list[0]) == 2 and
                 pairs_list.count(pairs_list[1]) == 2 and
                 pairs_list.count(pairs_list[2]) == 2 and
-                pairs_list.count(pairs_list[3]) == 2):
+                pairs_list.count(pairs_list[3]) == 2 and
+                pairs_list.count(pairs_list[4]) == 2 and
+                pairs_list.count(pairs_list[5]) == 2):
 
                 # First and last pair have a stable coin
                 for i in stable_coins:
@@ -57,8 +59,8 @@ def valid_combination_3(pair1):
                         
                 try:
                     # Ensures the beginning and end of pairs_list are both stable coins
-                    if (i_ == pairs_list[0] or i_ == pairs_list[1] and
-                        i_ == pairs_list[4] or i_ == pairs_list[5]):
+                    if ((i_ == pairs_list[0] or i_ == pairs_list[1]) and
+                        (i_ == pairs_list[4] or i_ == pairs_list[5])):
 
                         catalog_output.append(pairs_list)
                 except:

@@ -7,11 +7,11 @@ import time
 
 
 pair_catalog_file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
+pair_catalog = json.load(pair_catalog_file)
 
 starting_amount_USD = 20
 USING_KCS_FOR_FEES = True
 
-pair_catalog = json.load(pair_catalog_file)
 
 client = Market(url="https://api.kucoin.com")
 pair_data = client.get_symbol_list()
@@ -28,7 +28,7 @@ def calc_fees(pair):
         fees_class = "Class A"
     elif pair.split("-")[0] in coin_fees["Class B"]["Coins"]:
         fees_class = "Class B"
-    elif pair.split("-")[0] in coin_fees["Class B"]["Coins"]:
+    elif pair.split("-")[0] in coin_fees["Class C"]["Coins"]:
         fees_class = "Class C"
 
     if USING_KCS_FOR_FEES:
@@ -76,19 +76,17 @@ def Read_File(path):
 
 
 def find_tri_arb_path():
-    for pairs in pair_catalog:
-        pairs_list = pairs
+    for pairs_list in pair_catalog:
                
-        pair1 = f"{pairs[0]}-{pairs[1]}"
-        pair2 = f"{pairs[2]}-{pairs[3]}"
-        pair3 = f"{pairs[4]}-{pairs[5]}"
+        pair1 = f"{pairs_list[0]}-{pairs_list[1]}"
+        pair2 = f"{pairs_list[2]}-{pairs_list[3]}"
+        pair3 = f"{pairs_list[4]}-{pairs_list[5]}"
 
         try:
             pair1_orderbook = Read_File(f"{os.getcwd()}/Results/{pair1}.kupair")
             pair2_orderbook = Read_File(f"{os.getcwd()}/Results/{pair2}.kupair")
             pair3_orderbook = Read_File(f"{os.getcwd()}/Results/{pair3}.kupair")
-        except Exception as e:
-            #print("File Error", e, pairs_list)
+        except:
             continue
 
         # Finds what the stable coin is 
@@ -107,101 +105,88 @@ def find_tri_arb_path():
         pair2_bids = pair2_orderbook[pair2]['bids']
         pair3_asks = pair3_orderbook[pair3]['asks']
         pair3_bids = pair3_orderbook[pair3]['bids']
+        
+        # Transaction 1 Check
+        where_are_stable_coins = [] # [0, 4]
+        for index, item in enumerate(pairs_list):
+            if item == stable_coin_in_pairs:
+                where_are_stable_coins.append(index)
 
-        try: # prevents index errors
-            # Transaction 1 Check
-            where_are_stable_coins = [] # [0, 4]
-            for index, item in enumerate(pairs_list):
-                if item == stable_coin_in_pairs:
-                    where_are_stable_coins.append(index)
+        # Transaction 2 Check
+        where_is_transaction_coin_two = [] # [1, 2]
+        if where_are_stable_coins[0] == 0:
+            where_is_transaction_coin_two.append(1)
+            where_is_transaction_coin_two.append(pairs_list.index(pairs_list[1], 2))
+        elif where_are_stable_coins[0] == 1:
+            where_is_transaction_coin_two.append(0)
+            where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
 
-            # Transaction 2 Check
-            where_is_transaction_coin_two = [] # [1, 2]
-            if where_are_stable_coins[0] == 0:
-                where_is_transaction_coin_two.append(1)
-                where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
-            elif where_are_stable_coins[0] == 1:
-                where_is_transaction_coin_two.append(0)
-                where_is_transaction_coin_two.append(pairs_list.index(pairs_list[0], 1))
+        # Transaction 3 Check
+        where_is_transaction_coin_three = []
+        if where_is_transaction_coin_two[1] == 2:
+            where_is_transaction_coin_three.append(3)
+        elif where_is_transaction_coin_two[1] == 3:
+            where_is_transaction_coin_three.append(2)
+        if where_are_stable_coins[1] == 4:
+            where_is_transaction_coin_three.append(5)
+        elif where_are_stable_coins[1] == 5:
+            where_is_transaction_coin_three.append(4)
 
-            # Transaction 3 Check
-            where_is_transaction_coin_three = []
-            if where_is_transaction_coin_two[1] == 2:
-                where_is_transaction_coin_three.append(3)
-            elif where_is_transaction_coin_two[1] == 3:
-                where_is_transaction_coin_three.append(2)
-            if where_are_stable_coins[1] == 4:
-                where_is_transaction_coin_three.append(5)
-            elif where_are_stable_coins[1] == 5:
-                where_is_transaction_coin_three.append(4)
-        except Exception as e:
-            print(e)
-            continue
+       # MANA-BTC
+        # Price in BTC, Amount in MANA 
+        # Bid is the price buyers are ready to buy at
+        # Ask id the price sellers are ready to sell at
+        # The coin on the left is what I am either buying of selling
 
-        if (len(where_are_stable_coins) == 2 and
-            len(where_is_transaction_coin_two) == 2 and
-            len(where_is_transaction_coin_three) == 2):
+        # Calculations
+        coin_amount = 0
+        # Transaction 1
+        if where_are_stable_coins[0] == 0:
+            coin_amount = starting_amount_USD * float(pair1_bids[0][0])
+        elif where_are_stable_coins[0] == 1:
+            coin_amount = starting_amount_USD / float(pair1_asks[0][0])
+        coin_amount = round_value(coin_amount, pair=pair1) * calc_fees(pair1)
 
-            # MANA-BTC
-            # Price in BTC, Amount in MANA 
-            # Bid is the price buyers are ready to buy at
-            # Ask id the price sellers are ready to sell at
-            # The coin on the left is what I am either buying of selling
+        # Transaction 2
+        if where_is_transaction_coin_two[1] == 2:
+            coin_amount = coin_amount * float(pair2_bids[0][0])
+        elif where_is_transaction_coin_two[1] == 3:
+            coin_amount = coin_amount / float(pair2_asks[0][0])
+        coin_amount = round_value(coin_amount, pair=pair2) * calc_fees(pair2)
 
-            try: # Fixes index error
-                # Calculations
-                coin_amount = 0
-                # Transaction 1
+        # Transaction 3
+        if where_is_transaction_coin_three[1] == 4:
+            coin_amount = coin_amount * float(pair3_bids[0][0])
+        elif where_is_transaction_coin_three[1] == 5:
+            coin_amount = coin_amount / float(pair3_asks[0][0])
+        coin_amount = round_value(coin_amount, pair=pair3) * calc_fees(pair3)
+
+        # Transaction 4 - If need to exchange back to USDT - Work on later, for now focus on 3 pair chains
+        #if where_are_stable_coins[0] != 'USDT':
+        #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
+
+        if (coin_amount - starting_amount_USD) > 0.01:
+            print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+            if "USDT" in pair1: # It starts with USDT so its easy
+                    
                 if where_are_stable_coins[0] == 0:
+                    os.system(f"echo '{pair1} sell {round_value(starting_amount_USD * float(pair1_bids[0][0]), pair=pair1)} {pair1_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
                     coin_amount = starting_amount_USD * float(pair1_bids[0][0])
                 elif where_are_stable_coins[0] == 1:
+                    os.system(f"echo '{pair1} buy {round_value(starting_amount_USD / float(pair1_asks[0][0]), pair=pair1)} {pair1_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
                     coin_amount = starting_amount_USD / float(pair1_asks[0][0])
-                coin_amount = round_value(coin_amount, pair=pair1) * calc_fees(pair1)
-
-                # Transaction 2
+            
                 if where_is_transaction_coin_two[1] == 2:
+                    os.system(f"echo '{pair2} sell {round_value((coin_amount * float(pair2_bids[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
                     coin_amount = coin_amount * float(pair2_bids[0][0])
                 elif where_is_transaction_coin_two[1] == 3:
+                    os.system(f"echo '{pair2} buy {round_value((coin_amount / float(pair2_asks[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
                     coin_amount = coin_amount / float(pair2_asks[0][0])
-                coin_amount = round_value(coin_amount, pair=pair2) * calc_fees(pair2)
 
-                # Transaction 3
                 if where_is_transaction_coin_three[1] == 4:
-                    coin_amount = coin_amount * float(pair3_bids[0][0])
+                    os.system(f"echo '{pair3} sell {round_value((coin_amount * float(pair3_bids[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
                 elif where_is_transaction_coin_three[1] == 5:
-                    coin_amount = coin_amount / float(pair3_asks[0][0])
-                coin_amount = round_value(coin_amount, pair=pair3) * calc_fees(pair3)
-
-                # Transaction 4 - If need to exchange back to USDT - Work on later, for now focus on 3 pair chains
-                #if where_are_stable_coins[0] != 'USDT':
-                #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
-            except Exception as e:
-                #print(e)
-                continue
-
-
-            if (coin_amount - starting_amount_USD) > 0.01:
-                print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
-                if "USDT" in pair1: # It starts with USDT so its easy
-                    
-                    if where_are_stable_coins[0] == 0:
-                        os.system(f"echo '{pair1} sell {round_value(starting_amount_USD * float(pair1_bids[0][0]), pair=pair1)} {pair1_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
-                        coin_amount = starting_amount_USD * float(pair1_bids[0][0])
-                    elif where_are_stable_coins[0] == 1:
-                        os.system(f"echo '{pair1} buy {round_value(starting_amount_USD / float(pair1_asks[0][0]), pair=pair1)} {pair1_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
-                        coin_amount = starting_amount_USD / float(pair1_asks[0][0])
-            
-                    if where_is_transaction_coin_two[1] == 2:
-                        os.system(f"echo '{pair2} sell {round_value((coin_amount * float(pair2_bids[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
-                        coin_amount = coin_amount * float(pair2_bids[0][0])
-                    elif where_is_transaction_coin_two[1] == 3:
-                        os.system(f"echo '{pair2} buy {round_value((coin_amount / float(pair2_asks[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
-                        coin_amount = coin_amount / float(pair2_asks[0][0])
-
-                    if where_is_transaction_coin_three[1] == 4:
-                        os.system(f"echo '{pair3} sell {round_value((coin_amount * float(pair3_bids[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
-                    elif where_is_transaction_coin_three[1] == 5:
-                        os.system(f"echo '{pair3} buy {round_value((coin_amount / float(pair3_asks[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
+                    os.system(f"echo '{pair3} buy {round_value((coin_amount / float(pair3_asks[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
 
 
 if __name__ == "__main__":
