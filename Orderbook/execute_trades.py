@@ -32,7 +32,7 @@ def make_order(data):
     try:
         if data[0] not in restricted_pairs:
             # Place order with the following arguments Pair, Buy/Sell, Amount, Price
-            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]))#, timeInForce="FOK")
+            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]), timeInForce="FOK")
     except Exception as e:
         if "403" in str(e):
             time.sleep(10)
