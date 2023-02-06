@@ -194,7 +194,7 @@ def find_tri_arb_path():
         #if where_are_stable_coins[0] != 'USDT':
         #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
 
-        if (coin_amount - starting_amount_USD) > 0.001:
+        if (coin_amount - starting_amount_USD) > 0.010:
             if "USDT" in pair1: # It starts with USDT so its easy
 
                 pending_orders = [] 
@@ -209,11 +209,13 @@ def find_tri_arb_path():
                     coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
 
                 if where_is_transaction_coin_two[1] == 2:
-                    coin_amount = round_value((coin_amount - (coin_amount * calc_fees(pair2))) * float(pair2_bids[0][0]), pair=pair2)
+                    coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2)
                     pending_orders.append(f'{pair2} sell {coin_amount} {pair2_bids[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
                 elif where_is_transaction_coin_two[1] == 3:
-                    coin_amount = round_value((coin_amount - (coin_amount * calc_fees(pair2))) / float(pair2_asks[0][0]), pair=pair2)
+                    coin_amount = round_value(coin_amount  / float(pair2_asks[0][0]), pair=pair2)
                     pending_orders.append(f'{pair2} buy {coin_amount} {pair2_asks[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
 
                 if where_is_transaction_coin_three[1] == 4:
                     coin_amount = round_value(coin_amount * float(pair3_bids[0][0]), pair=pair3)
