@@ -9,6 +9,11 @@ pkill -9 find_triangular
 # Generates catalog
 #./create_valid_pairs_catalog.bin
 
-./websocket_spawner.bin & 
-./find_triangular_arbitrage.bin & 
+# Starts websockets
+./websocket_spawner.bin &
+# Waits for symbols to be downloaded/refreshed
+sleep 120
+# Starts Arbitrage calculator
+./find_triangular_arbitrage.bin &
+# Executes orders for possible Arbitrages
 ./execute_trades.bin && fg
