@@ -3,7 +3,6 @@ import numpy as np
 import json
 import os
 import shutil
-import time
 
 
 pair_catalog_file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
@@ -31,8 +30,9 @@ def calc_fees(pair):
     elif pair.split("-")[0] in coin_fees["Class C"]["Coins"]:
         fees_class = "Class C"
 
+    # We are always a taker because we fill existing orders in the orderbook
     if USING_KCS_FOR_FEES:
-        return coin_fees[fees_class]["KCS Taker"] # We are always a taker because we fill existing orders in the orderbook
+        return coin_fees[fees_class]["KCS Taker"] 
     else:
         return coin_fees[fees_class]["Regular Taker"]
 
@@ -43,13 +43,9 @@ def round_value(coin_amount, **kwargs):
         for i in pair_data:
             if kwargs['pair'] == i['symbol']:
                 # Ensures size is not over or under requirement
-                if coin_amount < float(i['baseMaxSize']):
-                    coin_amount = coin_amount
-                else:
+                if coin_amount > float(i['baseMaxSize']):
                     coin_amount = float(i['baseMaxSize'])
-                if coin_amount > float(i['baseMinSize']):
-                    coin_amount = coin_amount
-                else:
+                if coin_amount < float(i['baseMinSize']):
                     coin_amount = 0 #float(i['baseMinSize']) # this should mean it requires more than I have !!!!!
 
                 # Ensurs rounds to the right decimal place
@@ -66,7 +62,6 @@ def round_value(coin_amount, **kwargs):
     if len(split_value) == 1:
         return float(split_value[0])
     return float(f'{split_value[0]}.{split_value[1][:length]}') # math.floor rounds down, math.ceil round up
-
 
 def Read_File(path):
     shutil.copy(path, f"{os.getcwd()}/TempRead.kupair")
@@ -143,52 +138,93 @@ def find_tri_arb_path():
         # Transaction 1
         if where_are_stable_coins[0] == 0:
             coin_amount = starting_amount_USD * float(pair1_bids[0][0])
+            if coin_amount > float(pair1_bids[0][1]):
+                continue
         elif where_are_stable_coins[0] == 1:
             coin_amount = starting_amount_USD / float(pair1_asks[0][0])
-        coin_amount = round_value(coin_amount, pair=pair1) * calc_fees(pair1)
+            if coin_amount > float(pair1_asks[0][1]):
+                continue
+        coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair1)), pair=pair1)
+        if coin_amount == 0.0:
+            continue
 
         # Transaction 2
         if where_is_transaction_coin_two[1] == 2:
             coin_amount = coin_amount * float(pair2_bids[0][0])
+            if coin_amount > float(pair1_bids[0][1]):
+                continue
         elif where_is_transaction_coin_two[1] == 3:
             coin_amount = coin_amount / float(pair2_asks[0][0])
-        coin_amount = round_value(coin_amount, pair=pair2) * calc_fees(pair2)
+            if coin_amount > float(pair2_asks[0][1]):
+                continue
+        coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair2)), pair=pair2)
+        if coin_amount == 0.0:
+            continue
 
         # Transaction 3
         if where_is_transaction_coin_three[1] == 4:
             coin_amount = coin_amount * float(pair3_bids[0][0])
+            if coin_amount > float(pair3_bids[0][1]):
+                continue
         elif where_is_transaction_coin_three[1] == 5:
             coin_amount = coin_amount / float(pair3_asks[0][0])
-        coin_amount = round_value(coin_amount, pair=pair3) * calc_fees(pair3)
+            if coin_amount > float(pair3_asks[0][1]):
+                continue
+        coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair3)), pair=pair3)
+        if coin_amount == 0.0:
+            continue
 
         # Transaction 4 - If need to exchange back to USDT - Work on later, for now focus on 3 pair chains
         #if where_are_stable_coins[0] != 'USDT':
         #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
 
-        if (coin_amount - starting_amount_USD) > 0.01:
-            print(f"\n For pair: {pairs}\nI now have {coin_amount}\nWhich means a net of ${coin_amount-starting_amount_USD}")
+        if (coin_amount - starting_amount_USD) > 0.010:
             if "USDT" in pair1: # It starts with USDT so its easy
+
+                pending_orders = [] 
                     
                 if where_are_stable_coins[0] == 0:
-                    os.system(f"echo '{pair1} sell {round_value(starting_amount_USD * float(pair1_bids[0][0]), pair=pair1)} {pair1_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
-                    coin_amount = starting_amount_USD * float(pair1_bids[0][0])
+                    coin_amount = round_value(starting_amount_USD * float(pair1_bids[0][0]), pair=pair1)
+                    pending_orders.append(f'{pair1} sell {coin_amount} {pair1_bids[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
                 elif where_are_stable_coins[0] == 1:
-                    os.system(f"echo '{pair1} buy {round_value(starting_amount_USD / float(pair1_asks[0][0]), pair=pair1)} {pair1_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
-                    coin_amount = starting_amount_USD / float(pair1_asks[0][0])
-            
+                    coin_amount = round_value(starting_amount_USD / float(pair1_asks[0][0]), pair=pair1)
+                    pending_orders.append(f'{pair1} buy {coin_amount} {pair1_asks[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
+
                 if where_is_transaction_coin_two[1] == 2:
-                    os.system(f"echo '{pair2} sell {round_value((coin_amount * float(pair2_bids[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
-                    coin_amount = coin_amount * float(pair2_bids[0][0])
+                    coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2)
+                    pending_orders.append(f'{pair2} sell {coin_amount} {pair2_bids[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
                 elif where_is_transaction_coin_two[1] == 3:
-                    os.system(f"echo '{pair2} buy {round_value((coin_amount / float(pair2_asks[0][0]) * calc_fees(pair1)), pair=pair2)} {pair2_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
-                    coin_amount = coin_amount / float(pair2_asks[0][0])
+                    coin_amount = round_value(coin_amount / float(pair2_asks[0][0]), pair=pair2)
+                    pending_orders.append(f'{pair2} buy {coin_amount} {pair2_asks[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
 
                 if where_is_transaction_coin_three[1] == 4:
-                    os.system(f"echo '{pair3} sell {round_value((coin_amount * float(pair3_bids[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_bids[0][0]}' >> {os.getcwd()}/trades.pipe")
+                    coin_amount = round_value(coin_amount * float(pair3_bids[0][0]), pair=pair3)
+                    pending_orders.append(f'{pair3} sell {coin_amount} {pair3_bids[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair3))) # Calc fees
                 elif where_is_transaction_coin_three[1] == 5:
-                    os.system(f"echo '{pair3} buy {round_value((coin_amount / float(pair3_asks[0][0]) * calc_fees(pair2)), pair=pair3)} {pair3_asks[0][0]}' >> {os.getcwd()}/trades.pipe")
+                    coin_amount = round_value(coin_amount / float(pair3_asks[0][0]), pair=pair3)
+                    pending_orders.append(f'{pair3} buy {coin_amount} {pair3_asks[0][0]}')
+                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair3))) # Calc fees
+                
+                # Removes orders for 0.0
+                try: # prevents making an order with 0.0
+                    for i in pending_orders:
+                        if " 0.0 " in i:
+                            raise
+                except:
+                    continue 
 
-
+                # Actually execute the orders
+                if len(pending_orders) >= 3: # Prevents orders of 3 or less pairs
+                    print("\n")
+                    print(f"\nFor pair: {pairs_list}\nFound an arb with a net of ${coin_amount-starting_amount_USD}")
+                    print(pending_orders)
+                    os.system(f"echo '{pending_orders}' >> {os.getcwd()}/trades.pipe") # Sends all 3 orders in one go
+            
 if __name__ == "__main__":
     while True:
         find_tri_arb_path()
