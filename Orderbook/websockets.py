@@ -92,5 +92,10 @@ class kucoin_orderbook_websocket():
 
 
 if __name__ == "__main__":
-    # Ensure arguments follow this order threadnumber stringofcoins
-    kucoin_orderbook_websocket(sys.argv[1], sys.argv[2])
+    while True:
+        # Ensures if websocket dies from ping_pong timeout, it will start again
+        try:
+            # Ensure arguments follow this order threadnumber stringofcoins
+            kucoin_orderbook_websocket(sys.argv[1], sys.argv[2])
+        except:
+            pass
