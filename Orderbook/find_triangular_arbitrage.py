@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import shutil
+import time
 
 
 pair_catalog_file = open(f"{os.getcwd()}/Triangular_pairs.catalog", "r")
@@ -23,19 +24,23 @@ coin_fees = {"Class A": {"Regular Maker": 0.001, "Regular Taker": 0.001, "KCS Ma
 
 
 def calc_fees(pair):
-    if pair.split("-")[0] in coin_fees["Class A"]["Coins"]:
+    for i in pair_data:
+        if pair == i['symbol']:
+           feeCurrency = i['feeCurrency']
+    if feeCurrency in coin_fees["Class A"]["Coins"]:
         fees_class = "Class A"
-    elif pair.split("-")[0] in coin_fees["Class B"]["Coins"]:
+    elif feeCurrency in coin_fees["Class B"]["Coins"]:
         fees_class = "Class B"
-    elif pair.split("-")[0] in coin_fees["Class C"]["Coins"]:
+    elif feeCurrency in coin_fees["Class C"]["Coins"]:
         fees_class = "Class C"
 
-    # We are always a taker because we fill existing orders in the orderbook
-    if USING_KCS_FOR_FEES:
-        return coin_fees[fees_class]["KCS Taker"] 
-    else:
-        return coin_fees[fees_class]["Regular Taker"]
-
+    try: # We are always a taker because we fill existing orders in the orderbook
+        if USING_KCS_FOR_FEES:
+            return coin_fees[fees_class]["KCS Taker"] 
+        else:
+            return coin_fees[fees_class]["Regular Taker"]
+    except:
+        return 0.003 # this is the worst possible fee so it cannot be worse - fixes case where fee currancy has no fee????
 
 def round_value(coin_amount, **kwargs):
     if "pair" in kwargs.keys():
@@ -96,10 +101,19 @@ def find_tri_arb_path():
              
         pair1_asks = pair1_orderbook[pair1]['asks']
         pair1_bids = pair1_orderbook[pair1]['bids']
+        pair1_time = pair1_orderbook[pair1]['timestamp']
         pair2_asks = pair2_orderbook[pair2]['asks']
         pair2_bids = pair2_orderbook[pair2]['bids']
+        pair2_time = pair2_orderbook[pair2]['timestamp']
         pair3_asks = pair3_orderbook[pair3]['asks']
         pair3_bids = pair3_orderbook[pair3]['bids']
+        pair3_time = pair3_orderbook[pair3]['timestamp']
+
+        # Ensures data is not too old
+        now = int(time.time())
+        if (now - int(str(pair1_time)[:-3])) > 60 or (now - int(str(pair2_time)[:-3])) > 60 or (now - int(str(pair3_time)[:-3])) > 60:
+            continue # data from one chain is older than a minute old and is no good
+
         
         # Transaction 1 Check
         where_are_stable_coins = [] # [0, 4]
@@ -178,7 +192,7 @@ def find_tri_arb_path():
         #if where_are_stable_coins[0] != 'USDT':
         #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
 
-        if (coin_amount - starting_amount_USD) > 0.010:
+        if (coin_amount - starting_amount_USD) > 0.001:
             if "USDT" in pair1: # It starts with USDT so its easy
 
                 pending_orders = [] 
@@ -193,13 +207,11 @@ def find_tri_arb_path():
                     coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
 
                 if where_is_transaction_coin_two[1] == 2:
-                    coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2)
+                    coin_amount = round_value((coin_amount - (coin_amount * calc_fees(pair2))) * float(pair2_bids[0][0]), pair=pair2)
                     pending_orders.append(f'{pair2} sell {coin_amount} {pair2_bids[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
                 elif where_is_transaction_coin_two[1] == 3:
-                    coin_amount = round_value(coin_amount / float(pair2_asks[0][0]), pair=pair2)
+                    coin_amount = round_value((coin_amount - (coin_amount * calc_fees(pair2))) / float(pair2_asks[0][0]), pair=pair2)
                     pending_orders.append(f'{pair2} buy {coin_amount} {pair2_asks[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
 
                 if where_is_transaction_coin_three[1] == 4:
                     coin_amount = round_value(coin_amount * float(pair3_bids[0][0]), pair=pair3)
