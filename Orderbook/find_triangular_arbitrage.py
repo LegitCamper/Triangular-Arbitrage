@@ -234,9 +234,9 @@ def find_tri_arb_path():
 
                 # Actually execute the orders
                 if len(pending_orders) >= 3: # Prevents orders of 3 or less pairs
-                    print("\n")
-                    print(f"\nFor pair: {pairs_list}\nFound an arb with a net of ${coin_amount-starting_amount_USD}")
-                    print(pending_orders)
+                    #print("\n")
+                    #print(f"\nFor pair: {pairs_list}\nFound an arb with a net of ${coin_amount-starting_amount_USD}")
+                    #print(pending_orders)
                     os.system(f"echo '{pending_orders}' >> {os.getcwd()}/trades.pipe") # Sends all 3 orders in one go
             
 if __name__ == "__main__":
