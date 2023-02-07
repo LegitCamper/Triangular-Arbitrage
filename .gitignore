@@ -2,3 +2,7 @@
 *.pyc
 *.bin
 *.build
+Orderbook/bin/KucoinKeys.json
+/Orderbook/bin/KucoinKeys.json
+Kucoin/bin/KucoinKeys.json
+/Kucoin/bin/KucoinKeys.json
