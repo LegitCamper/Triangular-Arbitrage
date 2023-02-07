@@ -200,31 +200,28 @@ def find_tri_arb_path():
                 pending_orders = [] 
                     
                 if where_are_stable_coins[0] == 0:
-                    coin_amount = round_value(starting_amount_USD * float(pair1_bids[0][0]), pair=pair1)
-                    pending_orders.append(f'{pair1} sell {coin_amount} {pair1_bids[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
+                    coin_amount = round_value(starting_amount_USD * float(pair1_bids[0]), pair=pair1)
+                    direction, price = "sell", pair1_bids[0]
                 elif where_are_stable_coins[0] == 1:
-                    coin_amount = round_value(starting_amount_USD / float(pair1_asks[0][0]), pair=pair1)
-                    pending_orders.append(f'{pair1} buy {coin_amount} {pair1_asks[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair1))) # Calc fees
+                    direction, price = "buy", pair1_asks[0]
+                    coin_amount = round_value(starting_amount_USD / float(pair1_asks[0]), pair=pair1)
+                pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
                 if where_is_transaction_coin_two[1] == 2:
-                    coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2)
-                    pending_orders.append(f'{pair2} sell {coin_amount} {pair2_bids[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
+                    #coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2) # Dont need to calculate anything? If i already have 600 tokens I just want to sell 600 tokens
+                    direction, price = "sell", pair2_bids[0]
                 elif where_is_transaction_coin_two[1] == 3:
-                    coin_amount = round_value(coin_amount  / float(pair2_asks[0][0]), pair=pair2)
-                    pending_orders.append(f'{pair2} buy {coin_amount} {pair2_asks[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair2))) # Calc fees
+                    #coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
+                    direction, price = "buy", pair2_asks[0]
+                pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
                 if where_is_transaction_coin_three[1] == 4:
-                    coin_amount = round_value(coin_amount * float(pair3_bids[0][0]), pair=pair3)
-                    pending_orders.append(f'{pair3} sell {coin_amount} {pair3_bids[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair3))) # Calc fees
+                    coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
+                    direction, price = "sell", pair3_bids[0]
                 elif where_is_transaction_coin_three[1] == 5:
-                    coin_amount = round_value(coin_amount / float(pair3_asks[0][0]), pair=pair3)
-                    pending_orders.append(f'{pair3} buy {coin_amount} {pair3_asks[0][0]}')
-                    coin_amount = (coin_amount - (coin_amount * calc_fees(pair3))) # Calc fees
+                    coin_amount = round_value(coin_amount / float(pair3_asks[0]), pair=pair3)
+                    direction, price = "buy", pair3_asks[0]
+                pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
                 
                 # Removes orders for 0.0
                 try: # prevents making an order with 0.0
