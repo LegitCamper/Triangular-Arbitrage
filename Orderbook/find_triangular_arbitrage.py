@@ -201,34 +201,34 @@ def find_tri_arb_path():
                     
                 if where_are_stable_coins[0] == 0:
                     coin_amount = round_value(starting_amount_USD * float(pair1_bids[0]), pair=pair1)
-                    direction = pair1_bids[0]
-                    price = "sell"
+                    price = pair1_bids[0]
+                    direction = "sell"
                 elif where_are_stable_coins[0] == 1:
-                    direction = pair1_asks[0]
-                    price = "buy"
                     coin_amount = round_value(starting_amount_USD / float(pair1_asks[0]), pair=pair1)
+                    price = pair1_asks[0]
+                    direction = "buy"
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
                 coin_amount = coin_amount - (coin_amount * calc_fees(pair2)) # Calc fees for transaction 2
                 if where_is_transaction_coin_two[1] == 2:
                     #coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2) # Dont need to calculate anything? If i already have 600 tokens I just want to sell 600 tokens
-                    direction = pair2_bids[0]
-                    price = "sell"
+                    price = pair2_bids[0]
+                    direction = "sell"
                 elif where_is_transaction_coin_two[1] == 3:
                     #coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
-                    direction = pair2_asks[0]
-                    price = "buy"
+                    price = pair2_asks[0]
+                    direction = "buy"
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
                 coin_amount = coin_amount - (coin_amount * calc_fees(pair3)) # Calc fees for transaction 3
                 if where_is_transaction_coin_three[1] == 4:
                     coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
-                    direction = pair3_bids[0]
-                    price = "sell"
+                    price = pair3_bids[0]
+                    direction = "sell"
                 elif where_is_transaction_coin_three[1] == 5:
                     coin_amount = round_value(coin_amount / float(pair3_asks[0]), pair=pair3)
-                    direction = pair3_asks[0]
-                    price = "buy"
+                    price = pair3_asks[0]
+                    direction = "buy" 
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
                 
                 # Removes orders for 0.0
