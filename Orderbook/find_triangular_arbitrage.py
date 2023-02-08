@@ -209,7 +209,6 @@ def find_tri_arb_path():
                     direction = "buy"
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
-                coin_amount = coin_amount - (coin_amount * calc_fees(pair2)) # Calc fees for transaction 2
                 if where_is_transaction_coin_two[1] == 2:
                     #coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2) # Dont need to calculate anything? If i already have 600 tokens I just want to sell 600 tokens
                     price = pair2_bids[0]
@@ -218,9 +217,8 @@ def find_tri_arb_path():
                     #coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
                     price = pair2_asks[0]
                     direction = "buy"
-                pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
+                pending_orders.append(f'{pair2} {direction} {coin_amount} {price}')
 
-                coin_amount = coin_amount - (coin_amount * calc_fees(pair3)) # Calc fees for transaction 3
                 if where_is_transaction_coin_three[1] == 4:
                     coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
                     price = pair3_bids[0]
@@ -229,7 +227,7 @@ def find_tri_arb_path():
                     coin_amount = round_value(coin_amount / float(pair3_asks[0]), pair=pair3)
                     price = pair3_asks[0]
                     direction = "buy" 
-                pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
+                pending_orders.append(f'{pair3} {direction} {coin_amount} {price}')
                 
                 # Removes orders for 0.0
                 try: # prevents making an order with 0.0
@@ -244,7 +242,7 @@ def find_tri_arb_path():
                     #print("\n")
                     #print(f"\nFor pair: {pairs_list}\nFound an arb with a net of ${coin_amount-starting_amount_USD}")
                     #print(pending_orders)
-                    #print(pairs_list)
+                    print(pairs_list)
                     os.system(f"echo '{pending_orders}' >> {os.getcwd()}/trades.pipe") # Sends all 3 orders in one go
             
 if __name__ == "__main__":
