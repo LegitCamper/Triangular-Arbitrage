@@ -13,6 +13,7 @@ pkill -9 find_triangular
 ./websocket_spawner.bin &
 # Waits for symbols to be downloaded/refreshed
 sleep 120
+python -c "print('\n\nStarting Arbitrage calculator')"
 # Starts Arbitrage calculator
 ./find_triangular_arbitrage.bin &
 # Executes orders for possible Arbitrages
