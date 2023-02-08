@@ -98,4 +98,4 @@ if __name__ == "__main__":
             # Ensure arguments follow this order threadnumber stringofcoins
             kucoin_orderbook_websocket(sys.argv[1], sys.argv[2])
         except:
-            pass
+            time.sleep(120)
