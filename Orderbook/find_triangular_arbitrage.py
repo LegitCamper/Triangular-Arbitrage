@@ -101,19 +101,19 @@ def find_tri_arb_path():
         if pairs_list[1] == pairs_list[5]:
             stable_coin_in_pairs = pairs_list[1]
              
-        pair1_asks = pair1_orderbook[pair1]['asks']
-        pair1_bids = pair1_orderbook[pair1]['bids']
-        pair1_time = pair1_orderbook[pair1]['timestamp']
-        pair2_asks = pair2_orderbook[pair2]['asks']
-        pair2_bids = pair2_orderbook[pair2]['bids']
-        pair2_time = pair2_orderbook[pair2]['timestamp']
-        pair3_asks = pair3_orderbook[pair3]['asks']
-        pair3_bids = pair3_orderbook[pair3]['bids']
-        pair3_time = pair3_orderbook[pair3]['timestamp']
+        pair1_asks = pair1_orderbook[pair1]['asks'][0]
+        pair1_bids = pair1_orderbook[pair1]['bids'][0]
+        pair1_time = str(pair1_orderbook[pair1]['timestamp'])
+        pair2_asks = pair2_orderbook[pair2]['asks'][0]
+        pair2_bids = pair2_orderbook[pair2]['bids'][0]
+        pair2_time = str(pair2_orderbook[pair2]['timestamp'])
+        pair3_asks = pair3_orderbook[pair3]['asks'][0]
+        pair3_bids = pair3_orderbook[pair3]['bids'][0]
+        pair3_time = str(pair3_orderbook[pair3]['timestamp'])
 
         # Ensures data is not too old
         now = int(time.time())
-        if (now - int(str(pair1_time)[:-3])) > oldest_order_in_pairs or (now - int(str(pair2_time)[:-3])) > oldest_order_in_pairs or (now - int(str(pair3_time)[:-3])) > oldest_order_in_pairs:
+        if (now - int(pair1_time[:-3])) > oldest_order_in_pairs or (now - int(pair2_time[:-3])) > oldest_order_in_pairs or (now - int(pair3_time[:-3])) > oldest_order_in_pairs:
             continue # data from one chain is older than a minute old and is no good
 
         
@@ -153,12 +153,12 @@ def find_tri_arb_path():
         coin_amount = 0
         # Transaction 1
         if where_are_stable_coins[0] == 0:
-            coin_amount = starting_amount_USD * float(pair1_bids[0][0])
-            if coin_amount > float(pair1_bids[0][1]):
+            coin_amount = starting_amount_USD * float(pair1_bids[0])
+            if coin_amount > float(pair1_bids[1]):
                 continue
         elif where_are_stable_coins[0] == 1:
-            coin_amount = starting_amount_USD / float(pair1_asks[0][0])
-            if coin_amount > float(pair1_asks[0][1]):
+            coin_amount = starting_amount_USD / float(pair1_asks[0])
+            if coin_amount > float(pair1_asks[1]):
                 continue
         coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair1)), pair=pair1)
         if coin_amount == 0.0:
@@ -166,12 +166,12 @@ def find_tri_arb_path():
 
         # Transaction 2
         if where_is_transaction_coin_two[1] == 2:
-            coin_amount = coin_amount * float(pair2_bids[0][0])
-            if coin_amount > float(pair1_bids[0][1]):
+            coin_amount = coin_amount * float(pair2_bids[0])
+            if coin_amount > float(pair1_bids[1]):
                 continue
         elif where_is_transaction_coin_two[1] == 3:
-            coin_amount = coin_amount / float(pair2_asks[0][0])
-            if coin_amount > float(pair2_asks[0][1]):
+            coin_amount = coin_amount / float(pair2_asks[0])
+            if coin_amount > float(pair2_asks[1]):
                 continue
         coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair2)), pair=pair2)
         if coin_amount == 0.0:
@@ -179,12 +179,12 @@ def find_tri_arb_path():
 
         # Transaction 3
         if where_is_transaction_coin_three[1] == 4:
-            coin_amount = coin_amount * float(pair3_bids[0][0])
-            if coin_amount > float(pair3_bids[0][1]):
+            coin_amount = coin_amount * float(pair3_bids[0])
+            if coin_amount > float(pair3_bids[1]):
                 continue
         elif where_is_transaction_coin_three[1] == 5:
-            coin_amount = coin_amount / float(pair3_asks[0][0])
-            if coin_amount > float(pair3_asks[0][1]):
+            coin_amount = coin_amount / float(pair3_asks[0])
+            if coin_amount > float(pair3_asks[1]):
                 continue
         coin_amount = round_value(coin_amount - (coin_amount * calc_fees(pair3)), pair=pair3)
         if coin_amount == 0.0:
@@ -195,32 +195,40 @@ def find_tri_arb_path():
         #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
 
         if (coin_amount - starting_amount_USD) > 0.010:
-            if "USDT" in pair1: # It starts with USDT so its easy
+            if "USDT" in pair1 and "USDT" in pair3: # It starts with USDT so its easy
 
                 pending_orders = [] 
                     
                 if where_are_stable_coins[0] == 0:
                     coin_amount = round_value(starting_amount_USD * float(pair1_bids[0]), pair=pair1)
-                    direction, price = "sell", pair1_bids[0]
+                    direction = pair1_bids[0]
+                    price = "sell"
                 elif where_are_stable_coins[0] == 1:
-                    direction, price = "buy", pair1_asks[0]
+                    direction = pair1_asks[0]
+                    price = "buy"
                     coin_amount = round_value(starting_amount_USD / float(pair1_asks[0]), pair=pair1)
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
+                coin_amount = coin_amount - (coin_amount * calc_fees(pair2)) # Calc fees for transaction 2
                 if where_is_transaction_coin_two[1] == 2:
                     #coin_amount = round_value(coin_amount * float(pair2_bids[0][0]), pair=pair2) # Dont need to calculate anything? If i already have 600 tokens I just want to sell 600 tokens
-                    direction, price = "sell", pair2_bids[0]
+                    direction = pair2_bids[0]
+                    price = "sell"
                 elif where_is_transaction_coin_two[1] == 3:
                     #coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
-                    direction, price = "buy", pair2_asks[0]
+                    direction = pair2_asks[0]
+                    price = "buy"
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
 
+                coin_amount = coin_amount - (coin_amount * calc_fees(pair3)) # Calc fees for transaction 3
                 if where_is_transaction_coin_three[1] == 4:
                     coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
-                    direction, price = "sell", pair3_bids[0]
+                    direction = pair3_bids[0]
+                    price = "sell"
                 elif where_is_transaction_coin_three[1] == 5:
                     coin_amount = round_value(coin_amount / float(pair3_asks[0]), pair=pair3)
-                    direction, price = "buy", pair3_asks[0]
+                    direction = pair3_asks[0]
+                    price = "buy"
                 pending_orders.append(f'{pair1} {direction} {coin_amount} {price}')
                 
                 # Removes orders for 0.0
@@ -236,6 +244,7 @@ def find_tri_arb_path():
                     #print("\n")
                     #print(f"\nFor pair: {pairs_list}\nFound an arb with a net of ${coin_amount-starting_amount_USD}")
                     #print(pending_orders)
+                    #print(pairs_list)
                     os.system(f"echo '{pending_orders}' >> {os.getcwd()}/trades.pipe") # Sends all 3 orders in one go
             
 if __name__ == "__main__":
