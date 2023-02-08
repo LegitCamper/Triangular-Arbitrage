@@ -2,6 +2,7 @@
 
 from tenacity import retry
 from tenacity.stop import stop_after_attempt
+import json
 import time
 import os
 
@@ -16,9 +17,12 @@ def new_fifo():
 
     return open(FIFO, "r")
 
-api_key = '63dacd030d23f70001d0a924'
-api_secret = '19756bc7-4504-4072-873e-ccc4e1d4ad9f'
-api_passphrase = '@^uYR*FygYlnVR24fBq6srQbKq2kKNDh'
+# Get API Keys
+with open(f"{os.getcwd()}/KucoinKeys.json") as f:
+    keys = json.load(f)
+    api_key = keys['KucoinApiKeys']
+    api_secret = keys['kucoinApiSecret']
+    api_passphrase = keys['kucoinApiPassphrase']
 
 # Trade
 from kucoin.client import Trade
@@ -27,12 +31,12 @@ client = Trade(key=api_key, secret=api_secret, passphrase=api_passphrase, is_san
 
 restricted_pairs = []
 
-#@retry(stop=(stop_after_attempt(5)))
+@retry(stop=(stop_after_attempt(5)))
 def make_order(data):
     try:
         if data[0] not in restricted_pairs:
             # Place order with the following arguments Pair, Buy/Sell, Amount, Price
-            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]), timeInForce="FOK")
+            client.create_limit_order(data[0], data[1], float(data[2]), float(data[3]), timeInForce="IOC")
     except Exception as e:
         if "403" in str(e):
             time.sleep(10)
