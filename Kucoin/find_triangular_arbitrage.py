@@ -2,7 +2,6 @@ from kucoin.client import Market
 import numpy as np
 import json
 import os
-import shutil
 import time
 
 
@@ -165,7 +164,7 @@ def find_tri_arb_path():
         # Transaction 2
         if where_is_transaction_coin_two[1] == 2:
             coin_amount = coin_amount * float(pair2_bids[0])
-            if coin_amount > float(pair1_bids[1]):
+            if coin_amount > float(pair2_bids[1]):
                 continue
         elif where_is_transaction_coin_two[1] == 3:
             coin_amount = coin_amount / float(pair2_asks[0])
@@ -192,7 +191,7 @@ def find_tri_arb_path():
         #if where_are_stable_coins[0] != 'USDT':
         #    coin_amount = round_value(coin_amount - (coin_amount * 0.012)) # 0.12% fees
 
-        if (coin_amount - starting_amount_USD) > 0.0001 and (coin_amount - starting_amount_USD) < 0.0010:
+        if coin_amount > starting_amount_USD: # (coin_amount - starting_amount_USD) > 0.0001 and (coin_amount - starting_amount_USD) < 0.0100:
             if "USDT" in pair1 and "USDT" in pair3: # It starts with USDT so its easy
 
                 pending_orders = [] 
