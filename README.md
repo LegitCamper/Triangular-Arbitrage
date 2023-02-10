@@ -7,7 +7,9 @@ Time spent so far:
 
 
 # Instructions (Linux Only)
-- Enter the Orderbook directory
-- `chmod +x build_binaries.sh && ./build_binaries.sh` - Builds binaries
-- `cd bin && chmod +x run.sh && ./run.sh` - Runs binaries
-- Wait until you find an abritrage
+- Download the latest release and unzip it
+- `chmod +x run.sh && ./run.sh`
+
+# Does it make money?
+- Well it can, just not consistently
+- I need to find ways to make it faster (Maybe even use a faster language)
