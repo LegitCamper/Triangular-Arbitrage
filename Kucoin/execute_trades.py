@@ -4,6 +4,7 @@ from random import randint
 from tenacity import retry
 from tenacity.stop import stop_after_attempt
 import requests
+requests.packages.urllib3.util.connection.HAS_IPV6 = False
 import json
 import time
 import os
