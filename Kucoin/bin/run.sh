@@ -17,4 +17,4 @@ python -c "print('\n\nStarting Arbitrage calculator')"
 # Starts Arbitrage calculator
 ./find_triangular_arbitrage.bin &
 # Executes orders for possible Arbitrages
-./execute_trades.bin && fg
+env CURL_CA_BUNDLE="" env REQUESTS_CA_BUNDLE="" ./execute_trades.bin && fg
