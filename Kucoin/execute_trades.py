@@ -76,6 +76,8 @@ while True:
             line = line.replace("\n", "")
             line = line.split(", ")
             last_line = line
+            last_line.reverse() # Reverses list
+            backwards = False
             for data in line:
                 data = data.split(" ")
 
@@ -94,8 +96,15 @@ while True:
                         restricted_pairs.append(data[0])
                     elif '200004' in e:
                         # make new market order to undo order
-                        make_order(data, "market")
+                        backwards = True
+                        break
                     else:
                         print(e)
+    
+            # trades the oposiate of each order backwards 
+            if backwards:
+                for data in last_line:
+                    data = data.split(" ")
+                    make_order(data, "market")
 
     fifo.close() # Allows the fifo to be deleted and re-created
