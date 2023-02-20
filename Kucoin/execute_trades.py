@@ -40,13 +40,21 @@ def get_login():
 restricted_pairs = []
 
 #@retry(stop=(stop_after_attempt(5)))
-def make_order(data):
+def make_order(data, *args):
     url_endpoint = '/api/v1/orders'
 
     if data[0] not in restricted_pairs:
         post_headers = get_login()
 
-        post_data = {"symbol": data[0], "side": data[1], "type": "limit", "size": data[2], "price": data[3], "timeInForce": "IOC", "clientOid": randint(1000, 99999)}
+        if "limit" in args:
+            post_data = {"symbol": data[0], "side": data[1], "type": "limit", "size": data[2], "price": data[3], "timeInForce": "IOC", "clientOid": randint(1000, 99999)}
+        elif "market" in args:
+            # Switches side to reverse the trades
+            if data[2] == "buy":
+                data[2] = "sell"
+            elif data[2] == "sell":
+                data[2] = "buy"
+            post_data = {"symbol": data[0], "side": data[1], "type": "market", "size": data[2], "clientOid": randint(1000, 99999)}
 
         str_to_sign = str(int(round(time.time(), 3) * 1000)) + 'POST' + url_endpoint + json.dumps(post_data)
         api_signature = base64.b64encode(hmac.new(api_secret.encode('utf-8'), str_to_sign.encode('utf-8'), hashlib.sha256).digest())
@@ -67,13 +75,14 @@ while True:
             line = line.replace("]", "")
             line = line.replace("\n", "")
             line = line.split(", ")
+            last_line = line
             for data in line:
                 data = data.split(" ")
 
                 print(data)
                 # Error handling and retries
                 try:
-                    make_order(data)
+                    make_order(data, "limit")
 
                 except Exception as e:
                     e = str(e)
@@ -83,6 +92,9 @@ while True:
                         print("Not Exists")
                     elif '400500' in e:
                         restricted_pairs.append(data[0])
+                    elif '200004' in e:
+                        # make new market order to undo order
+                        make_order(data, "market")
                     else:
                         print(e)
 
