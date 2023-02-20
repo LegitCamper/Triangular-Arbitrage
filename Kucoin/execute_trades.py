@@ -95,24 +95,15 @@ while True:
                         print("Not Exists")
                     elif '400500' in e:
                         restricted_pairs.append(data[0])
-                    elif '200004' in e:
-                        # make new market order to undo order
-                        backwards = True
-                        break
                     else:
                         print(e)
-    
-            # trades the oposiate of each order backwards 
-            if backwards:
-                for data in last_line:
-                    data = data.split(" ")
 
-                    print("\nBackwards")
-                    try:
+                    # trades the oposiate of each order backwards 
+                    for data in last_line:
+                        data = data.split(" ")
+
+                        print("\nBackwards")
                         print(data)
                         make_order(data, "market")
-
-                    except Exception as e:
-                        print(e)
 
     fifo.close() # Allows the fifo to be deleted and re-created
