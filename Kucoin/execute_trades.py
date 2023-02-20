@@ -81,9 +81,10 @@ while True:
             for data in line:
                 data = data.split(" ")
 
-                print(data)
+                print("\nForward:")
                 # Error handling and retries
                 try:
+                    print(data)
                     make_order(data, "limit")
 
                 except Exception as e:
@@ -105,6 +106,13 @@ while True:
             if backwards:
                 for data in last_line:
                     data = data.split(" ")
-                    make_order(data, "market")
+
+                    print("\nBackwards")
+                    try:
+                        print(data)
+                        make_order(data, "market")
+
+                    except Exception as e:
+                        print(e)
 
     fifo.close() # Allows the fifo to be deleted and re-created
