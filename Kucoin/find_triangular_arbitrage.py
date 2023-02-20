@@ -211,13 +211,13 @@ def find_tri_arb_path():
                     price = pair2_bids[0]
                     direction = "sell"
                 elif where_is_transaction_coin_two[1] == 3:
-                    #coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
+                    coin_amount = round_value(coin_amount  / float(pair2_asks[0]), pair=pair2)
                     price = pair2_asks[0]
                     direction = "buy"
                 pending_orders.append(f'{pair2} {direction} {coin_amount} {price}')
 
                 if where_is_transaction_coin_three[1] == 4:
-                    coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
+                    #coin_amount = round_value(coin_amount * float(pair3_bids[0]), pair=pair3)
                     price = pair3_bids[0]
                     direction = "sell"
                 elif where_is_transaction_coin_three[1] == 5:
