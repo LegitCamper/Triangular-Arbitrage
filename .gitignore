@@ -4,3 +4,5 @@
 *.build
 *.dist
 *.json
+*target*
+
