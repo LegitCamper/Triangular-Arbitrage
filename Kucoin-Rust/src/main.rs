@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Display;
 use std::fs::{File, remove_file};
 use std::path::Path;
 use rand::prelude::*;
@@ -8,14 +9,16 @@ use reqwest::header::USER_AGENT;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // The other coins cause isses, should just still to USDT
-const STABLE_COINS: Vec::new() = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
+const STABLE_COINS: Vec<&str> = vec!["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 
-fn cwd() -> String {
+fn cwd_plus_path(path: String) -> String {
     let path = env::current_dir();
-    path.expect("Cannot get CWD").display().to_string()
+    let cwd: String = path.expect("Cannot get CWD").display().to_string();
+    path.to_string().push_str(&cwd.as_str())
 }
 
-const fifo_path: String = cwd() + "/trades.pip";
+const fifo_path: String = cwd_plus_path("/trades.pip".to_string());
+//println!{"{}", fifo_path} // ensure this is correct
 
 struct Api_Login {
     api_key: String,
@@ -25,14 +28,14 @@ struct Api_Login {
 }
 
 fn get_api_keys() -> Api_Login {
-    let json_file_path: String = cwd() + "/KucoinKeys.json";
+    let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
     let json_file = Path::new(&json_file_path);
     let file = File::open(json_file).expect("KucoinKeys.json not found");
     let api_keys: Vec<String> =
         serde_json::from_reader(file).expect("error while reading KucoinKeys.json");
-    let api_key: String = api_keys["kucoinApiKey"];
-    let api_secret: String = api_keys["kucoinApiSecret"];
-    let api_passphrase: String = api_keys["kucoinApiPassphrase"];
+    let api_key: String = api_keys.kucoinApiKey;
+    let api_secret: String = api_keys.kucoinApiSecret;
+    let api_passphrase: String = api_keys.kucoinApiPassphrase;
     api_passphrase = 0; // need to encode with base64 and encrypt with secret 
 
     // Gets current time in milliseconds
@@ -69,7 +72,7 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
     let mut headers = reqwest::header::HeaderMap::new();
 
     let client = reqwest::Client::new();
-    let response = if data[get_or_post] == "get" {
+    let response = if data.get_or_post == "get" {
         let result = client.get("http://httpbin.org/post")
         .header(api_keys)
         .json(&data) // this needs to be json of Kucoin_Request minus endpoit
@@ -77,20 +80,20 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
         .await;
         // Returns kucoin request
         result
-    } else if data["get_or_post"] == "post" {
+    } else if data.get_or_post == "post" {
         let res = client.post("http://httpbin.org/post")
         .header(api_keys)
         .json(data) // this needs to be json of Kucoin_Request minus endpoit
         .send()
         .await;
-    }
+    };
     response
 }
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
 fn get_tradable_coin_pairs() {
-    let mut coin_pairs = Vec::new();
+    // let mut coin_pairs;
 }
 
 fn valid_combinations_3() {
@@ -109,16 +112,16 @@ fn create_valid_pairs_catalog() {
     let mut rng = rand::thread_rng();
     let kucoin_request = Kucoin_Request {
         endpoint: "https://api.kucoin.com/api/v1/market/allTickers", 
-        get_or_post: "get" 
+        get_or_post: "get",
         get_symbols: true,
         client_id: rng.gen_range(1000..99999), // Generates new random client id
-    }
+    };
     let all_coin_pairs = kucoin_rest_api(kucoin_request);
     // Deletes old pairs catalog and makes new file to write to
-    let json_file_path: String = cwd() + "/Triangular_pairs.catalog";
+    let json_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
     if Path::new("/etc/hosts").exists() {
-        remove_file(json_file_path)?;
-    }
+        remove_file(json_file_path);
+    };
     let json_file = Path::new(&json_file_path);
     let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
     let triangular_pairs: Vec<Vec<String>> =
@@ -130,7 +133,7 @@ fn create_valid_pairs_catalog() {
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
 
 fn find_triangular_arbitrage() {
-    let json_file_path: String = cwd() + "/Triangular_pairs.catalog";
+    let json_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
     //println!("{}", cwd() + "/Triangular_pairs.catalog");
     let json_file = Path::new(&json_file_path);
     let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
@@ -152,7 +155,7 @@ fn new_pipe() {
 }
 
 fn execute_trades() {
-    let mut restricted_pairs = Vec::new(); // Holds pairs that I dont want to trade during runtime
+    let mut restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
     while true {
         // read named pip and execute orders
     }
