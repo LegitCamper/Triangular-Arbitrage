@@ -14,7 +14,7 @@ const STABLE_COINS: Vec<&str> = vec!["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 fn cwd_plus_path(path: String) -> String {
     let path = env::current_dir();
     let cwd: String = path.expect("Cannot get CWD").display().to_string();
-    path.to_string().push_str(&cwd.as_str())
+    path.expect("Path does not exist")to_string().push_str(&cwd.as_str())
 }
 
 const fifo_path: String = cwd_plus_path("/trades.pip".to_string());
@@ -36,7 +36,7 @@ fn get_api_keys() -> Api_Login {
     let api_key: String = api_keys.kucoinApiKey;
     let api_secret: String = api_keys.kucoinApiSecret;
     let api_passphrase: String = api_keys.kucoinApiPassphrase;
-    api_passphrase = 0; // need to encode with base64 and encrypt with secret 
+    api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret 
 
     // Gets current time in milliseconds
     let start = SystemTime::now();
@@ -55,14 +55,14 @@ fn get_api_keys() -> Api_Login {
 }
 
 struct Kucoin_Request {
-    endpoint: String,
-    get_or_post: String,
+    endpoint: &str,
+    get_or_post: &str,
     get_symbols: bool,
-    order_type: String,
+    order_type: &str,
     order_amount: f64,
     order_price: f64, 
-    order_symbol: String,
-    order_side: String,
+    order_symbol: &str,
+    order_side: &str,
     client_id: u32,
 }
 
@@ -70,12 +70,14 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
     let api_keys = get_api_keys();
 
     let mut headers = reqwest::header::HeaderMap::new();
+    let json = serde_json::to_string(&data).unwrap();
+
 
     let client = reqwest::Client::new();
     let response = if data.get_or_post == "get" {
         let result = client.get("http://httpbin.org/post")
         .header(api_keys)
-        .json(&data) // this needs to be json of Kucoin_Request minus endpoit
+        .json(&json) // this needs to be json of Kucoin_Request minus endpoit
         .send()
         .await;
         // Returns kucoin request
@@ -83,7 +85,7 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
     } else if data.get_or_post == "post" {
         let res = client.post("http://httpbin.org/post")
         .header(api_keys)
-        .json(data) // this needs to be json of Kucoin_Request minus endpoit
+        .json(&json) // this needs to be json of Kucoin_Request minus endpoit
         .send()
         .await;
     };
@@ -115,6 +117,11 @@ fn create_valid_pairs_catalog() {
         get_or_post: "get",
         get_symbols: true,
         client_id: rng.gen_range(1000..99999), // Generates new random client id
+        order_amount: 0.0,
+        order_price: 0.0,
+        order_side: "None",
+        order_symbol: "None",
+        order_type: "None"
     };
     let all_coin_pairs = kucoin_rest_api(kucoin_request);
     // Deletes old pairs catalog and makes new file to write to
@@ -127,7 +134,7 @@ fn create_valid_pairs_catalog() {
     let triangular_pairs: Vec<Vec<String>> =
         serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
 
-    let mut catalog_output = Vec::new(); // Holds the outputs of all Triangular pairs for printing
+    let mut catalog_output: Vec<Vec<String>> = Vec::new(); // Holds the outputs of all Triangular pairs for printing
 }
 
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
@@ -156,7 +163,7 @@ fn new_pipe() {
 
 fn execute_trades() {
     let mut restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
-    while true {
+    loop { // loops are infinite loops 
         // read named pip and execute orders
     }
 }
