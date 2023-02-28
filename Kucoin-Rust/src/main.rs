@@ -20,14 +20,7 @@ fn cwd_plus_path(path: String) -> String {
 const fifo_path: String = cwd_plus_path("/trades.pip".to_string());
 //println!{"{}", fifo_path} // ensure this is correct
 
-struct Api_Login {
-    api_key: String,
-    api_passphrase: String,
-    api_key_version: u8,
-    api_timestamp: String, // Might need to be an int
-}
-
-fn get_api_keys() -> Api_Login {
+fn get_api_keys() -> Tuple {
     let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
     let json_file = Path::new(&json_file_path);
     let file = File::open(json_file).expect("KucoinKeys.json not found");
@@ -45,13 +38,7 @@ fn get_api_keys() -> Api_Login {
         .expect("Time went backwards");
 
     // Returns Login Creds
-    let api_login = Api_Login {
-        api_key: api_key,
-        api_passphrase: api_passphrase,
-        api_key_version: 2,
-        api_timestamp: since_the_epoch 
-    };
-    api_login
+    let creds_tupl: (String, String, u8, String) = (api_key, api_passphrase, 2, since_the_epoch)
 }
 
 struct Kucoin_Request {
@@ -67,7 +54,7 @@ struct Kucoin_Request {
 }
 
 async fn kucoin_rest_api(data: Kucoin_Request) {
-    let api_keys = get_api_keys();
+    let (api_key, api_passphrase, api_key_version, api_timestamp) = get_api_keys();
 
     let mut headers = reqwest::header::HeaderMap::new();
     let json = serde_json::to_string(&data).unwrap();
@@ -75,19 +62,24 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
 
     let client = reqwest::Client::new();
     let response = if data.get_or_post == "get" {
-        let result = client.get("http://httpbin.org/post")
-        .header(api_keys)
+        let result = client.get("https://api.kucoin.com/" + )
+        // Include all the api headers
+        .header(api_key)
+        .header(api_passphrase)
+        .header(api_key_version)
+        .header(api_timestamp)
         .json(&json) // this needs to be json of Kucoin_Request minus endpoit
         .send()
         .await;
         // Returns kucoin request
         result
     } else if data.get_or_post == "post" {
-        let res = client.post("http://httpbin.org/post")
+        let res = client.post("https://api.kucoin.com/" + )
         .header(api_keys)
         .json(&json) // this needs to be json of Kucoin_Request minus endpoit
         .send()
         .await;
+        .unwrap()
     };
     response
 }
