@@ -14,31 +14,42 @@ const STABLE_COINS: Vec<&str> = vec!["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 fn cwd_plus_path(path: String) -> String {
     let path = env::current_dir();
     let cwd: String = path.expect("Cannot get CWD").display().to_string();
-    path.expect("Path does not exist")to_string().push_str(&cwd.as_str())
+    path.expect("Path does not exist").unwrap().to_string().push_str(&cwd.as_str())
 }
 
-const fifo_path: String = cwd_plus_path("/trades.pip".to_string());
+const FIFO_PATH: String = cwd_plus_path("/trades.pip".to_string());
 //println!{"{}", fifo_path} // ensure this is correct
+struct KucoinLogin {
+    api_key: String,
+    api_passphrase: String,
+    api_timestamp: String,
+    api_key_version: String,
+}
 
-fn get_api_keys() -> Tuple {
-    let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
-    let json_file = Path::new(&json_file_path);
-    let file = File::open(json_file).expect("KucoinKeys.json not found");
-    let api_keys: Vec<String> =
-        serde_json::from_reader(file).expect("error while reading KucoinKeys.json");
-    let api_key: String = api_keys.kucoinApiKey;
-    let api_secret: String = api_keys.kucoinApiSecret;
-    let api_passphrase: String = api_keys.kucoinApiPassphrase;
-    api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret 
+impl KucoinLogin {
+    fn get_api_keys() -> KucoinLogin {
+        let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
+        let json_file = Path::new(&json_file_path);
+        let file = File::open(json_file).expect("KucoinKeys.json not found");
+        let api_keys: Vec<String> =
+            serde_json::from_reader(file).expect("error while reading KucoinKeys.json");
+        let api_secret: String = "".to_string();
+        let api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret 
 
-    // Gets current time in milliseconds
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
+        // Gets current time in milliseconds
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
 
-    // Returns Login Creds
-    let creds_tupl: (String, String, u8, String) = (api_key, api_passphrase, 2, since_the_epoch)
+        // Returns Login Creds
+        KucoinLogin {
+            api_key : api_keys[0],
+            api_passphrase : api_keys[1],
+            api_timestamp : api_keys[2],
+            api_key_version : api_keys[3],
+        }
+    }
 }
 
 struct Kucoin_Request {
