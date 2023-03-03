@@ -1,23 +1,26 @@
+use rand::prelude::*;
 use std::env;
 use std::fmt::Display;
-use std::fs::{File, remove_file};
+use std::fs::{remove_file, File};
 use std::path::Path;
-use rand::prelude::*;
 extern crate libc;
-use std::ffi::CString;
 use reqwest::header::USER_AGENT;
+use std::ffi::CString;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // The other coins cause isses, should just still to USDT
 const STABLE_COINS: Vec<&str> = vec!["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 
-fn cwd_plus_path(path: String) -> String {
-    let path = env::current_dir();
-    let cwd: String = path.expect("Cannot get CWD").display().to_string();
-    path.expect("Path does not exist")to_string().push_str(&cwd.as_str())
+fn file_plus_cwd(file: String) -> String {
+    let cwd = env::current_dir();
+    cwd.expect("Cannot get CWD")
+        .display()
+        .to_string()
+        .insert_str(0, &file.as_str())
+    //.to_string()
 }
 
-const fifo_path: String = cwd_plus_path("/trades.pip".to_string());
+const fifo_path: String = file_plus_cwd("/trades.pip".to_string());
 //println!{"{}", fifo_path} // ensure this is correct
 
 fn get_api_keys() -> Tuple {
@@ -29,7 +32,7 @@ fn get_api_keys() -> Tuple {
     let api_key: String = api_keys.kucoinApiKey;
     let api_secret: String = api_keys.kucoinApiSecret;
     let api_passphrase: String = api_keys.kucoinApiPassphrase;
-    api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret 
+    api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret
 
     // Gets current time in milliseconds
     let start = SystemTime::now();
@@ -38,7 +41,12 @@ fn get_api_keys() -> Tuple {
         .expect("Time went backwards");
 
     // Returns Login Creds
-    let creds_tupl: (String, String, u8, String) = (api_key, api_passphrase, 2, since_the_epoch)
+    Api_Login {
+        api_key: api_key,
+        api_passphrase: api_passphrase,
+        api_key_version: 2,
+        api_timestamp: since_the_epoch,
+    };
 }
 
 struct Kucoin_Request {
@@ -47,7 +55,7 @@ struct Kucoin_Request {
     get_symbols: bool,
     order_type: &str,
     order_amount: f64,
-    order_price: f64, 
+    order_price: f64,
     order_symbol: &str,
     order_side: &str,
     client_id: u32,
@@ -58,7 +66,6 @@ async fn kucoin_rest_api(data: Kucoin_Request) {
 
     let mut headers = reqwest::header::HeaderMap::new();
     let json = serde_json::to_string(&data).unwrap();
-
 
     let client = reqwest::Client::new();
     let response = if data.get_or_post == "get" {
@@ -91,7 +98,7 @@ fn get_tradable_coin_pairs() {
 }
 
 fn valid_combinations_3() {
-   // make all possible combinations of 3 coins here 
+    // make all possible combinations of 3 coins here
 }
 
 fn valid_combinations_4() {
@@ -105,7 +112,7 @@ fn vailid_combinations_5() {
 fn create_valid_pairs_catalog() {
     let mut rng = rand::thread_rng();
     let kucoin_request = Kucoin_Request {
-        endpoint: "https://api.kucoin.com/api/v1/market/allTickers", 
+        endpoint: "https://api.kucoin.com/api/v1/market/allTickers",
         get_or_post: "get",
         get_symbols: true,
         client_id: rng.gen_range(1000..99999), // Generates new random client id
@@ -113,7 +120,7 @@ fn create_valid_pairs_catalog() {
         order_price: 0.0,
         order_side: "None",
         order_symbol: "None",
-        order_type: "None"
+        order_type: "None",
     };
     let all_coin_pairs = kucoin_rest_api(kucoin_request);
     // Deletes old pairs catalog and makes new file to write to
@@ -149,20 +156,18 @@ fn new_pipe() {
     }
     let filename = CString::new(fifo_path.path.clone()).unwrap();
     unsafe {
-            libc::mkfifo(filename.as_ptr(), 0o644);
+        libc::mkfifo(filename.as_ptr(), 0o644);
     }
 }
 
 fn execute_trades() {
     let mut restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
-    loop { // loops are infinite loops 
-        // read named pip and execute orders
+    loop { // loops are infinite loops
+         // read named pip and execute orders
     }
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
-
-
 
 // Runs all modules
 fn main() {
