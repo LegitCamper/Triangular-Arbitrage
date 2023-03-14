@@ -4,14 +4,21 @@ use std::fmt::Display;
 use std::fs::{remove_file, File};
 use std::path::Path;
 extern crate libc;
+use base64;
+use hex_literal::hex;
+use hmac::{Hmac, Mac};
 use reqwest::header::USER_AGENT;
+use sha2::Sha256;
 use std::ffi::CString;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+// Create alias for HMAC-SHA256
+type HmacSha256 = Hmac<Sha256>;
 
 // The other coins cause isses, should just still to USDT
 const STABLE_COINS: Vec<&str> = vec!["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 
-fn file_plus_cwd(file: String) -> String {
+fn file_plus_cwd(file: String) {
     let mut cwd = env::current_dir();
     let cwd = cwd
         .expect("Cannot get CWD")
@@ -77,13 +84,24 @@ async fn kucoin_rest_api(data: KucoinRequest) {
     let mut headers = reqwest::header::HeaderMap::new();
     let json = serde_json::to_string(&data).expect("Failed to make json body");
 
+    // encrypt KC-API-SIGN
+    let sign_data: String = b"".to_string();
+    sign_data
+        .push(api_creds.api_timestamp)
+        .push(api_creds.get_or_post)
+        .push(endpoint)
+        .push(json);
+    let mut hasher = Sha256::new();
+    hasher.update(sign_data);
+    base64::encode();
+
     let client = reqwest::Client::new();
     let response = if data.get_or_post == "get" {
         let result = client
             .get(data.endpoint)
             // Include all the api headers
             .header("KC-API-KEY", api_creds.api_key)
-            .header("KC-API-SIGN", bas64signed)
+            .header("KC-API-SIGN")
             .header("KC-API-PASSPHRASE", api_creds.api_passphrase)
             .header("KC-API-KEY-VERSION", api_creds.api_key_version)
             .header("KC-API-TIMESTAMP", api_creds.api_timestamp)
