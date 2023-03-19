@@ -4,6 +4,7 @@ use std::env;
 //use std::fmt::Write;
 use std::fs::{read_to_string, remove_file, File};
 use std::io::{BufRead, BufReader, Error, Write};
+use std::os::unix::thread::JoinHandleExt;
 use std::path::Path;
 //use std::marker::Tuple;
 extern crate libc;
@@ -183,6 +184,8 @@ async fn get_tradable_coin_pairs() -> Vec<String> {
     coin_pairs
 }
 
+/////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
+
 fn has_two_occurrences(arr: &[String], string: &str) -> bool {
     let mut count = 0;
     for s in arr {
@@ -230,48 +233,87 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
     }
 }
 
-fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
+#[derive(Debug, Serialize, Deserialize)]
+struct CatalogStruct {
+    vec: Vec<[String; 6]>,
+}
+
+async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
     // Deletes old pairs catalog and makes new file to write to
     let catalog_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
     if Path::new(&catalog_file_path).exists() {
         remove_file(&catalog_file_path).expect("failed to remove Triangular_pairs.catalog");
     };
     let catalog_file = File::create(&catalog_file_path);
+    let mut output_list: Vec<[String; 6]> = Vec::new();
 
-    for pair1 in coin_pairs.iter() {
-        let pair1: [&str; 2] = pair1.split("-").collect::<Vec<&str>>().try_into().unwrap();
-        for pair2 in coin_pairs.iter() {
-            let pair2: [&str; 2] = pair2.split("-").collect::<Vec<&str>>().try_into().unwrap();
-            for pair3 in coin_pairs.iter() {
-                let pair3: [&str; 2] = pair3.split("-").collect::<Vec<&str>>().try_into().unwrap();
+    for i in coin_pairs.iter().combinations(3) {
+        let pair1: [&str; 2] = i[0].split("-").collect::<Vec<&str>>().try_into().unwrap();
+        let pair2: [&str; 2] = i[1].split("-").collect::<Vec<&str>>().try_into().unwrap();
+        let pair3: [&str; 2] = i[2].split("-").collect::<Vec<&str>>().try_into().unwrap();
 
-                let pairs_list = [
-                    pair1[0].to_string(),
-                    pair1[1].to_string(),
-                    pair2[0].to_string(),
-                    pair2[1].to_string(),
-                    pair3[0].to_string(),
-                    pair3[1].to_string(),
-                ];
-
-                if validate_combination(&pairs_list) == true {
-                    writeln!(
-                        &mut catalog_file
-                            .as_ref()
-                            .expect("could not open catalog for writing"),
-                        "{:?}",
-                        pairs_list
-                    );
-                }
-            }
+        let pairs_list = [
+            pair1[0].to_string(),
+            pair1[1].to_string(),
+            pair2[0].to_string(),
+            pair2[1].to_string(),
+            pair3[0].to_string(),
+            pair3[1].to_string(),
+        ];
+        if validate_combination(&pairs_list) == true {
+            output_list.push(pairs_list);
         }
+    }
+    let catalog_file = File::create(&catalog_file_path);
+    writeln!(
+        &mut catalog_file
+            .as_ref()
+            .expect("could not open catalog for writing"),
+        "{:?}",
+        serde_json::to_string(&output_list).unwrap()
+    )
+    .expect("Failed to write CatalogStruct to catalog");
+}
+
+/////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
+
+fn find_triangular_arbitrage() {
+    let json_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
+    //println!("{}", cwd() + "/Triangular_pairs.catalog");
+    let json_file = Path::new(&json_file_path);
+    let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
+    let triangular_pairs: CatalogStruct =
+        serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
+    //println!("{:?}", triangular_pairs)
+}
+
+/////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
+
+fn new_pipe(fifo_path: &str) {
+    if Path::new(&fifo_path).exists() {
+        remove_file(fifo_path);
     }
 }
 
-#[tokio::main] // allows main to be async
+fn execute_trades() {
+    let mut restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
+    loop {
+        // read named pip and execute orders
+    }
+}
+
+/////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
+
+// Runs all modules
+#[tokio::main]
 async fn main() {
     let coin_pairs: Vec<String> = coin_pairs().await;
     let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
 
-    create_valid_pairs_catalog(coin_pairs);
+    // Part 1 -- create_valid_pairs
+    create_valid_pairs_catalog(coin_pairs).await
+    // Part 2 -- websocket_spawner
+    // Part 3 -- find_triangular_arbitrage
+    // find_triangular_arbitrage()
+    // Part 4 -- execute_trades
 }
