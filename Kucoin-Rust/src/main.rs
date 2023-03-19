@@ -153,7 +153,6 @@ struct KucoinCoinsCode {
     data: KucoinCoinsTime,
 }
 
-// Cahnge the output type
 async fn get_tradable_coin_pairs() -> KucoinCoinsCode {
     let mut rng = rand::thread_rng();
     let kucoin_request = KucoinRequest {
@@ -170,9 +169,9 @@ async fn get_tradable_coin_pairs() -> KucoinCoinsCode {
     serde_json::from_str(&kucoin_request_string.as_str()).expect("JSON was not well-formatted")
 }
 
-fn has_two_occurrences(vec: &Vec<String>, string: &str) -> bool {
+fn has_two_occurrences(arr: &[String], string: &str) -> bool {
     let mut count = 0;
-    for s in vec {
+    for s in arr {
         if s == string {
             count += 1;
         }
@@ -183,13 +182,13 @@ fn has_two_occurrences(vec: &Vec<String>, string: &str) -> bool {
     count == 2
 }
 
-fn validate_combination(pairs_list: &Vec<String>) -> bool {
-    let pairs_list_len = pairs_list.len();
+fn validate_combination(pairs_list: &[String; 6]) -> bool {
+    let pairs_list_len = pairs_list.len() - 1;
 
     // ensures the pairs can chain together
     let mut chainable: bool = false;
     for i in pairs_list.iter() {
-        if has_two_occurrences(&pairs_list, i) {
+        if has_two_occurrences(&pairs_list[..], i) {
             chainable = true
         } else {
             chainable = false;
@@ -198,14 +197,16 @@ fn validate_combination(pairs_list: &Vec<String>) -> bool {
     }
 
     // ensures first and last pair have a stable coin
+    let pairs_list_middle: &[String] = &pairs_list[2..pairs_list_len - 1]; // gets slice of pairs_list
     let mut stable: bool = false;
     for i in STABLE_COINS.iter() {
         let si = i.to_string();
         if si == pairs_list[0]
-            || si == pairs_list[1] && si == pairs_list[pairs_list_len - 2]
-            || si == pairs_list[pairs_list_len - 1]
+            || si == pairs_list[1] && si == pairs_list[pairs_list_len - 1]
+            || si == pairs_list[pairs_list_len] && pairs_list.contains(&si) == false
         {
             stable = true;
+            //println!("{}", pairs_list.contains(&si));
         }
     }
     if stable == true && chainable == true {
@@ -217,29 +218,26 @@ fn validate_combination(pairs_list: &Vec<String>) -> bool {
 
 // make all possible combinations of 3 coins here
 fn valid_combinations_3(coin_pairs: Vec<String>) {
-    let mut valid_combinations: Vec<Vec<String>> = Vec::new();
-    for pair1 in coin_pairs.iter() {
-        for pair2 in coin_pairs.iter() {
-            for pair3 in coin_pairs.iter() {
-                let pair1: Vec<&str> = pair1.split("-").collect();
-                let pair2: Vec<&str> = pair2.split("-").collect();
-                let pair3: Vec<&str> = pair3.split("-").collect();
+    let mut valid_combinations: Vec<[String; 6]> = Vec::new();
+    for i in coin_pairs.iter().combinations(3) {
+        let pair1: Vec<&str> = i[0].split("-").collect();
+        let pair2: Vec<&str> = i[1].split("-").collect();
+        let pair3: Vec<&str> = i[2].split("-").collect();
 
-                let pairs_list = vec![
-                    pair1[0].to_string(),
-                    pair1[1].to_string(),
-                    pair2[0].to_string(),
-                    pair2[1].to_string(),
-                    pair3[0].to_string(),
-                    pair3[0].to_string(),
-                ];
-                if validate_combination(&pairs_list) == true {
-                    valid_combinations.push(pairs_list)
-                }
-            }
+        let pairs_list = [
+            pair1[0].to_string(),
+            pair1[1].to_string(),
+            pair2[0].to_string(),
+            pair2[1].to_string(),
+            pair3[0].to_string(),
+            pair3[1].to_string(),
+        ];
+        if validate_combination(&pairs_list) == true {
+            println!("{}", pairs_list.join("-"));
+            valid_combinations.push(pairs_list)
         }
     }
-    print!("{:?}", valid_combinations)
+    println!("{:?}", valid_combinations)
 }
 
 fn valid_combinations_4() {
