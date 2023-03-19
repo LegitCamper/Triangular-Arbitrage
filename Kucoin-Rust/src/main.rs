@@ -1,18 +1,19 @@
-use core::future::poll_fn;
+//use core::future::poll_fn;
 use rand::prelude::*;
 use std::env;
-use std::fmt::Display;
+//use std::fmt::Write;
 use std::fs::{read_to_string, remove_file, File};
-//use std::marker::Tuple;
-use std::os::unix::process;
+use std::io::{BufRead, BufReader, Error, Write};
 use std::path::Path;
+//use std::marker::Tuple;
 extern crate libc;
+//use std::process;
 use duration_string::DurationString;
 use itertools::Itertools;
-use reqwest::header::USER_AGENT;
+//use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use serde_this_or_that::as_f64;
-use std::ffi::CString;
+//use std::ffi::CString;
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
@@ -203,7 +204,7 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
         let si = i.to_string();
         if si == pairs_list[0]
             || si == pairs_list[1] && si == pairs_list[pairs_list_len - 1]
-            || si == pairs_list[pairs_list_len] && pairs_list.contains(&si) == false
+            || si == pairs_list[pairs_list_len] && pairs_list_middle.contains(&si) == false
         {
             stable = true;
             //println!("{}", pairs_list.contains(&si));
@@ -217,12 +218,12 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
 }
 
 // make all possible combinations of 3 coins here
-fn valid_combinations_3(coin_pairs: Vec<String>) {
+fn valid_combinations_3(coin_pairs: Vec<String>) -> Vec<[String; 6]> {
     let mut valid_combinations: Vec<[String; 6]> = Vec::new();
     for i in coin_pairs.iter().combinations(3) {
-        let pair1: Vec<&str> = i[0].split("-").collect();
-        let pair2: Vec<&str> = i[1].split("-").collect();
-        let pair3: Vec<&str> = i[2].split("-").collect();
+        let pair1: [&str; 2] = i[0].split("-").collect::<Vec<&str>>().try_into().unwrap();
+        let pair2: [&str; 2] = i[1].split("-").collect::<Vec<&str>>().try_into().unwrap();
+        let pair3: [&str; 2] = i[2].split("-").collect::<Vec<&str>>().try_into().unwrap();
 
         let pairs_list = [
             pair1[0].to_string(),
@@ -233,11 +234,10 @@ fn valid_combinations_3(coin_pairs: Vec<String>) {
             pair3[1].to_string(),
         ];
         if validate_combination(&pairs_list) == true {
-            println!("{}", pairs_list.join("-"));
             valid_combinations.push(pairs_list)
         }
     }
-    println!("{:?}", valid_combinations)
+    valid_combinations
 }
 
 fn valid_combinations_4() {
@@ -250,11 +250,11 @@ fn vailid_combinations_5() {
 
 async fn create_valid_pairs_catalog() {
     // Deletes old pairs catalog and makes new file to write to
-    let json_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
-    if Path::new(&json_file_path).exists() {
-        remove_file(&json_file_path).expect("failed to remove Triangular_pairs.catalog");
+    let catalog_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
+    if Path::new(&catalog_file_path).exists() {
+        remove_file(&catalog_file_path).expect("failed to remove Triangular_pairs.catalog");
     };
-    let json_file = Path::new(&json_file_path).exists();
+    let mut catalog_file = File::create(&catalog_file_path);
     let catalog_output: Vec<Vec<String>> = Vec::new(); // Holds the outputs of all Triangular pairs for printing
 
     let coin_pairs_struct = get_tradable_coin_pairs().await;
@@ -264,7 +264,17 @@ async fn create_valid_pairs_catalog() {
         coin_pairs.push(i.symbol.clone());
     }
 
-    valid_combinations_3(coin_pairs);
+    let outdata: Vec<[String; 6]> = valid_combinations_3(coin_pairs);
+
+    for i in outdata {
+        writeln!(
+            &mut catalog_file
+                .as_ref()
+                .expect("could not open catalog for writing"),
+            "{:?}",
+            i
+        );
+    }
 }
 
 #[tokio::main] // allows main to be async
