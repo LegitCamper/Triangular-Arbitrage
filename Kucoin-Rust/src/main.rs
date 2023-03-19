@@ -15,9 +15,14 @@ use serde::{Deserialize, Serialize};
 use serde_this_or_that::as_f64;
 //use std::ffi::CString;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::task;
 use url::Url;
 
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
+
+async fn coin_pairs() -> Vec<String> {
+    get_tradable_coin_pairs().await
+}
 
 fn cwd_plus_path(path: String) -> String {
     let cwd = env::current_dir()
@@ -154,7 +159,7 @@ struct KucoinCoinsCode {
     data: KucoinCoinsTime,
 }
 
-async fn get_tradable_coin_pairs() -> KucoinCoinsCode {
+async fn get_tradable_coin_pairs() -> Vec<String> {
     let mut rng = rand::thread_rng();
     let kucoin_request = KucoinRequest {
         get_or_post: "get".to_string(),
@@ -167,7 +172,15 @@ async fn get_tradable_coin_pairs() -> KucoinCoinsCode {
         order_type: "None".to_string(),
     };
     let kucoin_request_string = kucoin_rest_api(kucoin_request, "/api/v1/market/allTickers").await;
-    serde_json::from_str(&kucoin_request_string.as_str()).expect("JSON was not well-formatted")
+    let coin_pairs_struct: KucoinCoinsCode =
+        serde_json::from_str(&kucoin_request_string.as_str()).expect("JSON was not well-formatted");
+
+    let mut coin_pairs: Vec<String> = Vec::new();
+
+    for i in coin_pairs_struct.data.ticker.iter() {
+        coin_pairs.push(i.symbol.clone());
+    }
+    coin_pairs
 }
 
 fn has_two_occurrences(arr: &[String], string: &str) -> bool {
@@ -217,68 +230,48 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
     }
 }
 
-// make all possible combinations of 3 coins here
-fn valid_combinations_3(coin_pairs: Vec<String>) -> Vec<[String; 6]> {
-    let mut valid_combinations: Vec<[String; 6]> = Vec::new();
-    for i in coin_pairs.iter().combinations(3) {
-        let pair1: [&str; 2] = i[0].split("-").collect::<Vec<&str>>().try_into().unwrap();
-        let pair2: [&str; 2] = i[1].split("-").collect::<Vec<&str>>().try_into().unwrap();
-        let pair3: [&str; 2] = i[2].split("-").collect::<Vec<&str>>().try_into().unwrap();
-
-        let pairs_list = [
-            pair1[0].to_string(),
-            pair1[1].to_string(),
-            pair2[0].to_string(),
-            pair2[1].to_string(),
-            pair3[0].to_string(),
-            pair3[1].to_string(),
-        ];
-        if validate_combination(&pairs_list) == true {
-            valid_combinations.push(pairs_list)
-        }
-    }
-    valid_combinations
-}
-
-fn valid_combinations_4() {
-    // make all possible combinations of 4 coins here
-}
-
-fn vailid_combinations_5() {
-    // make all possible combinations of 5 coins here
-}
-
-async fn create_valid_pairs_catalog() {
+fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
     // Deletes old pairs catalog and makes new file to write to
     let catalog_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
     if Path::new(&catalog_file_path).exists() {
         remove_file(&catalog_file_path).expect("failed to remove Triangular_pairs.catalog");
     };
-    let mut catalog_file = File::create(&catalog_file_path);
-    let catalog_output: Vec<Vec<String>> = Vec::new(); // Holds the outputs of all Triangular pairs for printing
+    let catalog_file = File::create(&catalog_file_path);
 
-    let coin_pairs_struct = get_tradable_coin_pairs().await;
-    let mut coin_pairs: Vec<String> = Vec::new();
+    for pair1 in coin_pairs.iter() {
+        let pair1: [&str; 2] = pair1.split("-").collect::<Vec<&str>>().try_into().unwrap();
+        for pair2 in coin_pairs.iter() {
+            let pair2: [&str; 2] = pair2.split("-").collect::<Vec<&str>>().try_into().unwrap();
+            for pair3 in coin_pairs.iter() {
+                let pair3: [&str; 2] = pair3.split("-").collect::<Vec<&str>>().try_into().unwrap();
 
-    for i in coin_pairs_struct.data.ticker.iter() {
-        coin_pairs.push(i.symbol.clone());
-    }
+                let pairs_list = [
+                    pair1[0].to_string(),
+                    pair1[1].to_string(),
+                    pair2[0].to_string(),
+                    pair2[1].to_string(),
+                    pair3[0].to_string(),
+                    pair3[1].to_string(),
+                ];
 
-    let outdata: Vec<[String; 6]> = valid_combinations_3(coin_pairs);
-
-    for i in outdata {
-        writeln!(
-            &mut catalog_file
-                .as_ref()
-                .expect("could not open catalog for writing"),
-            "{:?}",
-            i
-        );
+                if validate_combination(&pairs_list) == true {
+                    writeln!(
+                        &mut catalog_file
+                            .as_ref()
+                            .expect("could not open catalog for writing"),
+                        "{:?}",
+                        pairs_list
+                    );
+                }
+            }
+        }
     }
 }
 
 #[tokio::main] // allows main to be async
 async fn main() {
+    let coin_pairs: Vec<String> = coin_pairs().await;
     let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
-    create_valid_pairs_catalog().await;
+
+    create_valid_pairs_catalog(coin_pairs);
 }
