@@ -228,7 +228,7 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
             //println!("{}", pairs_list.contains(&si));
         }
     }
-    if stable == true && chainable == true {
+    if stable && chainable {
         true
     } else {
         false
