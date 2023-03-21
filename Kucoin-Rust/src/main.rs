@@ -4,10 +4,10 @@ use std::env;
 //use std::fmt::Write;
 use std::fs::{read_to_string, remove_file, File};
 use std::io::{BufRead, BufReader, Error, Write};
-use std::os::unix::thread::JoinHandleExt;
+//use std::os::unix::thread::JoinHandleExt;
 use std::path::Path;
 //use std::marker::Tuple;
-extern crate libc;
+//extern crate libc;
 //use std::process;
 use duration_string::DurationString;
 use itertools::Itertools;
@@ -19,6 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task;
 use url::Url;
 
+// Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 
 async fn coin_pairs() -> Vec<String> {
@@ -304,6 +305,13 @@ fn execute_trades() {
     }
 }
 
+/////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
+
+#[derive(Debug, Serialize, Deserialize)]
+struct websocket_serde {
+
+}
+
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
 // Runs all modules
@@ -313,7 +321,7 @@ async fn main() {
     let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
 
     // Part 1 -- create_valid_pairs
-    create_valid_pairs_catalog(coin_pairs).await
+    //create_valid_pairs_catalog(coin_pairs).await
     // Part 2 -- websocket_spawner
     // Part 3 -- find_triangular_arbitrage
     // find_triangular_arbitrage()
