@@ -55,10 +55,19 @@ fn get_api_keys() -> (String, String, String, String) {
     (api_key, api_passphrase, api_key_version, since_the_epoch)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct KucoinRequest {
-    get_or_post: String,
-    get_symbols: bool,
+#[derive(Serialize, Debug)]
+enum KucoinRequest {
+    Get(KucoinRequestGet),
+    Post(KucoinRequestPost),
+}
+
+#[derive(Serialize, Debug)]
+struct KucoinRequestGet {
+    client_id: u32,
+}
+
+#[derive(Serialize, Debug)]
+struct KucoinRequestPost {
     order_type: String,
     order_amount: f64,
     order_price: f64,
@@ -79,36 +88,36 @@ async fn kucoin_rest_api(data: KucoinRequest, endpoint: &str) -> String {
         .expect("Was unable to join the endpoint and base_url");
 
     let client = reqwest::Client::new();
-    if data.get_or_post == "get" {
-        let res = client
-            .get(url)
-            .header("API_KEY", api_key)
-            .header("API_PASSPHRASE", api_passphrase)
-            .header("API_KEY_VERSION", api_key_version)
-            .header("API_TIMESTAMP", api_timestamp)
-            .json(&json)
-            .send()
-            .await
-            .expect("failed to get reqwest")
-            .text()
-            .await
-            .expect("failed to get payload");
-        res
-    } else if data.get_or_post == "post" {
-        client
-            .post(url)
-            .header("API_KEY", api_key)
-            .header("API_PASSPHRASE", api_passphrase)
-            .header("API_KEY_VERSION", api_key_version)
-            .header("API_TIMESTAMP", api_timestamp)
-            .json(&json)
-            .send()
-            .await
-            .expect("failed to post reqwest");
-        "Okay".to_string()
-    } else {
-        println!("Invalid get_or_post");
-        "None".to_string()
+    match data {
+        Get => {
+            let res = client
+                .get(url)
+                .header("API_KEY", api_key)
+                .header("API_PASSPHRASE", api_passphrase)
+                .header("API_KEY_VERSION", api_key_version)
+                .header("API_TIMESTAMP", api_timestamp)
+                .json(&json)
+                .send()
+                .await
+                .expect("failed to get reqwest")
+                .text()
+                .await
+                .expect("failed to get payload");
+            res
+        }
+        Post => {
+            client
+                .post(url)
+                .header("API_KEY", api_key)
+                .header("API_PASSPHRASE", api_passphrase)
+                .header("API_KEY_VERSION", api_key_version)
+                .header("API_TIMESTAMP", api_timestamp)
+                .json(&json)
+                .send()
+                .await
+                .expect("failed to post reqwest");
+            "Okay".to_string()
+        }
     }
 }
 
@@ -162,16 +171,9 @@ struct KucoinCoinsCode {
 
 async fn get_tradable_coin_pairs() -> Vec<String> {
     let mut rng = rand::thread_rng();
-    let kucoin_request = KucoinRequest {
-        get_or_post: "get".to_string(),
-        get_symbols: true,
+    let kucoin_request = KucoinRequest::Get(KucoinRequestGet {
         client_id: rng.gen_range(1000..99999), // Generates new random client id
-        order_amount: 0.0,
-        order_price: 0.0,
-        order_side: "None".to_string(),
-        order_symbol: "None".to_string(),
-        order_type: "None".to_string(),
-    };
+    });
     let kucoin_request_string = kucoin_rest_api(kucoin_request, "/api/v1/market/allTickers").await;
     let coin_pairs_struct: KucoinCoinsCode =
         serde_json::from_str(&kucoin_request_string.as_str()).expect("JSON was not well-formatted");
