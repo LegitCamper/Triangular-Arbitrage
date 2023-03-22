@@ -2,8 +2,13 @@
 use rand::prelude::*;
 use std::env;
 //use std::fmt::Write;
+//use futures_util::{future, pin_mut, StreamExt};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE, USER_AGENT};
 use std::fs::{read_to_string, remove_file, File};
 use std::io::{BufRead, BufReader, Error, Write};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+//use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tungstenite::{connect, Message};
 //use std::os::unix::thread::JoinHandleExt;
 use std::path::Path;
 //use std::marker::Tuple;
@@ -12,7 +17,9 @@ use std::path::Path;
 use duration_string::DurationString;
 use itertools::Itertools;
 //use reqwest::header::USER_AGENT;
-use serde::{Deserialize, Serialize};
+use data_encoding::BASE64;
+use ring::{digest, hmac};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_this_or_that::as_f64;
 //use std::ffi::CString;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,10 +29,6 @@ use url::Url;
 // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 
-async fn coin_pairs() -> Vec<String> {
-    get_tradable_coin_pairs().await
-}
-
 fn cwd_plus_path(path: String) -> String {
     let cwd = env::current_dir()
         .expect("Cannot get CWD")
@@ -34,26 +37,20 @@ fn cwd_plus_path(path: String) -> String {
     format!("{}{}", cwd.to_owned(), path.to_owned())
 }
 
-fn get_api_keys() -> (String, String, String, String) {
+#[derive(Debug, Serialize, Deserialize)]
+struct KucoinCreds<'de> {
+    api_key: &'de String,
+    api_passphrase: &'de String,
+    api_secret: &'de String,
+    api_key_version: &'de String,
+}
+
+fn get_api_keys() -> KucoinCreds<'de> {
     let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
     let data = read_to_string(json_file_path).expect("unable to read KucoinKeys.json");
-    let api_keys: serde_json::Value =
-        serde_json::from_str(&data).expect("unable to parse KucoinKeys.json");
-    let api_key: String = api_keys["keys"].to_string();
-    let api_secret: String = api_keys["secret"].to_string();
-    let mut api_passphrase: String = api_keys["passphrase"].to_string();
-    api_passphrase = "".to_string(); // need to encode with base64 and encrypt with secret
-    let api_key_version = "2".to_string();
-
-    // Gets current time in milliseconds
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    let since_the_epoch = DurationString::from(since_the_epoch).into();
-
-    // Returns Login Creds
-    (api_key, api_passphrase, api_key_version, since_the_epoch)
+    let api_creds: KucoinCreds =
+        serde_json::from_str::<'de>(&data).expect("unable to parse KucoinKeys.json");
+    api_creds
 }
 
 #[derive(Serialize, Debug)]
@@ -63,12 +60,18 @@ enum KucoinRequest {
 }
 
 #[derive(Serialize, Debug)]
+enum KucoinRequestPost {
+    Order(KucoinRequestOrderPost),
+    Websocket,
+}
+
+#[derive(Serialize, Debug)]
 struct KucoinRequestGet {
     client_id: u32,
 }
 
 #[derive(Serialize, Debug)]
-struct KucoinRequestPost {
+struct KucoinRequestOrderPost {
     order_type: String,
     order_amount: f64,
     order_price: f64,
@@ -77,26 +80,71 @@ struct KucoinRequestPost {
     client_id: u32,
 }
 
-async fn kucoin_rest_api(data: KucoinRequest, endpoint: &str) -> String {
-    let (api_key, api_passphrase, api_key_version, api_timestamp) = get_api_keys();
-
+async fn kucoin_rest_api<'de>(
+    data: KucoinRequest,
+    endpoint: &str,
+    api_creds: KucoinCreds,
+) -> Option<String> {
     let json = serde_json::to_string(&data).unwrap();
 
-    let base_url: Url =
-        Url::parse("https://api.kucoin.com/").expect("Was unable to parse base_url");
+    // Gets current time in milliseconds
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let since_the_epoch: String = DurationString::from(since_the_epoch).into();
+
+    // gets creds and encrppts message
+    let api_key = api_creds.api_key;
+    let api_passphrase = api_creds.api_passphrase;
+    let api_secret = api_creds.api_secret;
+    let api_key_version = api_creds.api_key_version;
+
+    let signed_key = hmac::Key::new(hmac::HMAC_SHA256, api_secret.as_bytes());
+    let payload = format!("{}+{}+{}+{}", &since_the_epoch, "POST", endpoint, json); // have it as static POST
+                                                                                    // because it doest seem
+                                                                                    // like the GET needs it
+    let signature = hmac::sign(&signed_key, payload.as_bytes());
+    let b64_encoded_sig = BASE64.encode(signature.as_ref());
+    println!("b64_encoded_sig: {}", b64_encoded_sig);
+
+    // adding all the reqiured headers
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::HeaderName::from_static("KC-API-KEY"),
+        reqwest::header::HeaderValue::from_static(&api_key),
+    );
+    headers.insert(
+        reqwest::header::HeaderName::from_static("KC-API-SIGN"),
+        reqwest::header::HeaderValue::from_static(&b64_encoded_sig),
+    );
+    headers.insert(
+        reqwest::header::HeaderName::from_static("KC-API-TIMESTAMP"),
+        reqwest::header::HeaderValue::from_static(&since_the_epoch),
+    );
+    headers.insert(
+        reqwest::header::HeaderName::from_static("API-KEY-PASSPHRASE"),
+        reqwest::header::HeaderValue::from_static(&api_passphrase),
+    );
+    headers.insert(
+        reqwest::header::HeaderName::from_static("KC-API-KEY-VERSION"),
+        reqwest::header::HeaderValue::from_static(&api_key_version),
+    );
+
+    let mut map = HeaderMap::new();
+
+    let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
     let url: Url = base_url
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
+    println!("url: {}", url);
 
     let client = reqwest::Client::new();
     match data {
         Get => {
             let res = client
                 .get(url)
-                .header("API_KEY", api_key)
-                .header("API_PASSPHRASE", api_passphrase)
-                .header("API_KEY_VERSION", api_key_version)
-                .header("API_TIMESTAMP", api_timestamp)
+                .headers(headers)
                 .json(&json)
                 .send()
                 .await
@@ -104,21 +152,32 @@ async fn kucoin_rest_api(data: KucoinRequest, endpoint: &str) -> String {
                 .text()
                 .await
                 .expect("failed to get payload");
-            res
+            Some(res)
         }
-        Post => {
-            client
-                .post(url)
-                .header("API_KEY", api_key)
-                .header("API_PASSPHRASE", api_passphrase)
-                .header("API_KEY_VERSION", api_key_version)
-                .header("API_TIMESTAMP", api_timestamp)
-                .json(&json)
-                .send()
-                .await
-                .expect("failed to post reqwest");
-            "Okay".to_string()
-        }
+        Post => match Post {
+            Order => {
+                client
+                    .post(url)
+                    .headers(headers)
+                    .json(&json)
+                    .send()
+                    .await
+                    .expect("failed to post reqwest");
+                None
+            }
+            Webscocket => {
+                let res = client
+                    .post(url)
+                    .headers(headers)
+                    .send()
+                    .await
+                    .expect("failed to post reqwest")
+                    .text()
+                    .await
+                    .expect("failed to get payload");
+                Some(res)
+            }
+        },
     }
 }
 
@@ -170,14 +229,17 @@ struct KucoinCoinsCode {
     data: KucoinCoinsTime,
 }
 
-async fn get_tradable_coin_pairs() -> Vec<String> {
+async fn get_tradable_coin_pairs(api_creds: KucoinCreds) -> Vec<String> {
     let mut rng = rand::thread_rng();
     let kucoin_request = KucoinRequest::Get(KucoinRequestGet {
         client_id: rng.gen_range(1000..99999), // Generates new random client id
     });
-    let kucoin_request_string = kucoin_rest_api(kucoin_request, "/api/v1/market/allTickers").await;
-    let coin_pairs_struct: KucoinCoinsCode =
-        serde_json::from_str(&kucoin_request_string.as_str()).expect("JSON was not well-formatted");
+    let kucoin_request_string =
+        kucoin_rest_api(kucoin_request, "/api/v1/market/allTickers", api_creds).await;
+    let coin_pairs_struct: KucoinCoinsCode = match kucoin_request_string {
+        Some(x) => serde_json::from_str(&x.as_str()).expect("JSON was not well-formatted"),
+        None => panic!("Failed to get coin pairs"),
+    };
 
     let mut coin_pairs: Vec<String> = Vec::new();
 
@@ -267,7 +329,6 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
             output_list.push(pairs_list);
         }
     }
-    let catalog_file = File::create(&catalog_file_path);
     writeln!(
         &mut catalog_file
             .as_ref()
@@ -294,7 +355,7 @@ fn find_triangular_arbitrage() {
 
 fn new_pipe(fifo_path: &str) {
     if Path::new(&fifo_path).exists() {
-        remove_file(fifo_path);
+        remove_file(fifo_path).expect("failed to remove fifo pipe");
     }
 }
 
@@ -308,8 +369,42 @@ fn execute_trades() {
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
 
 #[derive(Debug, Serialize, Deserialize)]
-struct websocket_serde {
+struct WebsocketToRust {}
+#[derive(Debug, Serialize, Deserialize)]
+struct WebsocketRustToSerde {}
 
+async fn kucoin_websocket(api_creds: KucoinCreds) {
+    // retreive temporary api token
+    let websocket_info = KucoinCreds::kucoin_rest_api(
+        KucoinRequest::Post(KucoinRequestPost::Websocket),
+        "/api/v1/bullet-private",
+        api_creds,
+    )
+    .await;
+    let (mut socket, _response) =
+        connect(Url::parse("ws://localhost:8765").unwrap()).expect("Can't connect");
+    // Write a message containing "Hello, Test!" to the server
+    socket
+        .write_message(Message::Text("Hello, Test!".into()))
+        .unwrap();
+
+    // Loop forever, handling parsing each message
+    loop {
+        let msg = socket.read_message().expect("Error reading message");
+        let msg = match msg {
+            tungstenite::Message::Text(s) => s,
+            _ => {
+                panic!()
+            }
+        };
+        let parsed: serde_json::Value = serde_json::from_str(&msg).expect("Can't parse to JSON");
+        println!("{:?}", parsed["result"]);
+    }
+}
+
+fn kucoin_websocket_spawner() {
+    // tokio task
+    // kucoin_websocket()
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
@@ -317,8 +412,9 @@ struct websocket_serde {
 // Runs all modules
 #[tokio::main]
 async fn main() {
-    let coin_pairs: Vec<String> = coin_pairs().await;
     let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
+    let api_creds: KucoinCreds = get_api_keys();
+    let coin_pairs: Vec<String> = get_tradable_coin_pairs(api_creds).await;
 
     // Part 1 -- create_valid_pairs
     //create_valid_pairs_catalog(coin_pairs).await
@@ -326,4 +422,11 @@ async fn main() {
     // Part 3 -- find_triangular_arbitrage
     // find_triangular_arbitrage()
     // Part 4 -- execute_trades
+    let websocket_token = KucoinCreds::kucoin_rest_api(
+        KucoinRequest::Post(KucoinRequestPost::Websocket),
+        "/api/v1/bullet-private",
+        api_creds,
+    )
+    .await;
+    println!("{:?}", websocket_token);
 }
