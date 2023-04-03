@@ -49,6 +49,7 @@ struct KucoinCreds {
 enum KucoinRequestType {
     Get,
     Post,
+    WebsocketToken,
 }
 
 #[derive(Serialize, Debug)]
@@ -79,7 +80,6 @@ fn construct_kucoin_request(
     json: String,
     method: KucoinRequestType,
 ) -> KucoinRequest {
-    todo!();
     let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
     let data = read_to_string(json_file_path).expect("unable to read KucoinKeys.json");
     let api_creds: KucoinCreds =
@@ -130,40 +130,39 @@ fn construct_kucoin_request(
         reqwest::header::HeaderValue::from_static(&api_creds.api_key_version),
     );
 
+    let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
+    let url: Url = base_url
+        .join(&self.endpoint)
+        .expect("Was unable to join the endpoint and base_url");
     let kucoin_request = match method {
-        Post => KucoinRequest {
+        ref Post => KucoinRequest {
             headers,
             request: json,
             method,
-            endpoint,
+            endpoint: url.to_string(),
         },
-        Get => KucoinRequest {
+        ref Get => KucoinRequest {
             headers,
             request: json,
             method,
-            endpoint,
+            endpoint: url.to_string(),
         },
     };
     kucoin_request
 }
 
 impl KucoinRequest {
-    async fn kucoin_rest_api(self) -> Option<String> {
-        //let api_creds: KucoinCreds = get_api_keys();
-
-        let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
-        let url: Url = base_url
-            .join(&self.endpoint)
-            .expect("Was unable to join the endpoint and base_url");
-        println!("url: {}", url);
+    async fn kucoin_rest_api(self) {
+        match &self.method {
+            Get => Get(self)
+        } 
 
         let client = reqwest::Client::new();
-        match self.method {
-            Get => {
+        async fn Get(struct) -> Option<String> {
                 let res = client
                     .get(url)
-                    .headers(self.headers)
-                    .json(&self.request)
+                    .headers(struct.headers)
+                    .json(struct.request)
                     .send()
                     .await
                     .expect("failed to get reqwest")
@@ -171,9 +170,8 @@ impl KucoinRequest {
                     .await
                     .expect("failed to get payload");
                 Some(res)
-            }
-            Post => match Post {
-                Order => {
+        }
+        async fn OderPost(self) -> Option<String> {
                     client
                         .post(url)
                         .headers(self.headers)
@@ -182,8 +180,8 @@ impl KucoinRequest {
                         .await
                         .expect("failed to post reqwest");
                     None
-                }
-                Webscocket => {
+        }
+        async fn Websocket(self) -> Option<String> {
                     let res = client
                         .post(url)
                         .headers(self.headers)
@@ -194,10 +192,7 @@ impl KucoinRequest {
                         .await
                         .expect("failed to get payload");
                     Some(res)
-                }
-            },
         }
-    }
 }
 
 #[allow(non_snake_case)]
@@ -293,7 +288,7 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
     // ensures the pairs can chain together
     let mut chainable: bool = false;
     for i in pairs_list.iter() {
-        if has_two_occurrences(&pairs_list[..], i) {
+        if Self::has_two_occurrences(&pairs_list[..], i) {
             chainable = true
         } else {
             chainable = false;
@@ -347,7 +342,7 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
             pair3[0].to_string(),
             pair3[1].to_string(),
         ];
-        if validate_combination(&pairs_list) == true {
+        if Self::validate_combination(&pairs_list) == true {
             output_list.push(pairs_list);
         }
     }
@@ -436,10 +431,10 @@ fn kucoin_websocket_spawner() {
 #[tokio::main]
 async fn main() {
     let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
-    let coin_pairs: Vec<String> = get_tradable_coin_pairs().await;
+    let coin_pairs: Vec<String> = Self::get_tradable_coin_pairs().await;
 
     // Part 1 -- create_valid_pairs
-    create_valid_pairs_catalog(coin_pairs).await
+    Self::create_valid_pairs_catalog(coin_pairs).await
     // Part 2 -- websocket_spawner
     // Part 3 -- find_triangular_arbitrage
     // find_triangular_arbitrage()
