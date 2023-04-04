@@ -14,6 +14,7 @@ use std::{
     thread,
     process
 };
+use futures::channel::mpsc::Receiver;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::mpsc,
@@ -423,20 +424,20 @@ struct KucoinCoinPrices {
     bestBidSize: f32
 } 
 
-async fn kucoin_websocket(api_creds: KucoinCreds) {
+async fn kucoin_websocket(websocket_token: String, channel_writer: Sender<>) {
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string()
     }; 
     // retreive temporary api token
     let websocket_info = construct_kucoin_request(
-        "/api/v1/bullet-private".to_string(),
+        "/api/v1/bullet-public".to_string(),
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
     );
     KucoinRequest::Get(websocket_info)
     .await;
     let (mut socket, _response) =
-        connect(Url::parse("ws://localhost:8765").unwrap()).expect("Can't connect");
+        connect(Url::parse("wss://ws-api-spot.kucoin.com/").unwrap()).expect("Can't connect");
     // Write a message containing "Hello, Test!" to the server
     socket
         .write_message(Message::Text("Hello, Test!".into()))
@@ -482,7 +483,6 @@ async fn main_spawner(coin_pairs: Vec<String>) {
     }
 }
 
-// Runs all modules
 #[tokio::main]
 async fn main() {
     let empty_json_request = EmptyKucoinJson {
@@ -507,9 +507,8 @@ async fn main() {
     //find_triangular_arbitrage()
     // Part 4 -- execute_trades
 
-    // split coin pairs into vecs of ten and run main_spawner enough times to use all of them
-    for i in 1..11 {
-        thread::spawn(move || {main_spawner(vec![i.to_string()])}); // might need to remove "move", alos have temp vec inplace of actual pairs
-    }
+    let (tx: Sender<websocket_to_validator>, rx: Receiver<websocket_to_validator>) = oneshot::channel(); // oneshot channel for websocket and validator
+    thread::spawn(|| {kucoin_websocket(api_)});
+    thread::spawn(|| {main_spawner(vec![i.to_string()])});
 
 }
