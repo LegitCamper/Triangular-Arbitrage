@@ -1,30 +1,40 @@
+// Remove warnings while building
+#[allow(unused_imports)]
+
+use std::{
+    env,borrow::Borrow,
+    fs::{read_to_string, remove_file, File},
+    io::{BufRead, BufReader, BufWriter, Error, Write},
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+    //os::unix::thread::JoinHandleExt,
+    //marker::Tuple,
+    //fmt::Write,
+    //ffi::CString
+    thread,
+    process
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    task::JoinSet,
+    task
+};
+use reqwest::{
+    header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE, USER_AGENT},
+    //header::USER_AGENT
+};
 use core::future::poll_fn;
 use rand::prelude::*;
-use std::borrow::Borrow;
-use std::env;
-//use std::fmt::Write;
 //use futures_util::{future, pin_mut, StreamExt};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE, USER_AGENT};
-use std::fs::{read_to_string, remove_file, File};
-use std::io::{BufRead, BufReader, BufWriter, Error, Write};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 //use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tungstenite::{connect, Message};
-//use std::os::unix::thread::JoinHandleExt;
-use std::path::Path;
-//use std::marker::Tuple;
 //extern crate libc;
-//use std::process;
 use duration_string::DurationString;
 use itertools::Itertools;
-//use reqwest::header::USER_AGENT;
 use data_encoding::BASE64;
 use ring::{digest, hmac};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_this_or_that::as_f64;
-//use std::ffi::CString;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::task;
 use url::Url;
 
 // Configurations
@@ -367,7 +377,14 @@ fn find_triangular_arbitrage() {
     let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
     let triangular_pairs: CatalogStruct =
         serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
-    //println!("{:?}", triangular_pairs)
+    println!("{:?}", triangular_pairs)
+}
+
+fn find_triangular_arbitrage_spawned() {
+    // loop will run forever
+    loop {
+        // TODO
+    }
 }
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
@@ -432,10 +449,13 @@ fn kucoin_websocket_spawner() {
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
+fn main_spawner(coin_pairs: Vec<String>) {
+    // use tokio tasks and channels to communticate between the fetcher, validator, and buyers 
+}
+
 // Runs all modules
 #[tokio::main]
 async fn main() {
-    let fifo_path: String = cwd_plus_path("/trades.pipe".to_string());
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string()
     };  
@@ -444,16 +464,23 @@ async fn main() {
         None => panic!("Failed connect to Kucoin and retrive list of coins")
     };
 
-    // Part 1 -- create_valid_pairs
-    //create_valid_pairs_catalog(coin_pairs).await
-    // Part 2 -- websocket_spawner
-    // Part 3 -- find_triangular_arbitrage
-    // find_triangular_arbitrage()
-    // Part 4 -- execute_trades
     let websocket_token = KucoinRequest::Get(construct_kucoin_request(
         "/api/v1/bullet-private".to_string(),
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post)
     ).await;
     println!("{:?}", websocket_token);
+
+    // Part 1 -- create_valid_pairs
+    //create_valid_pairs_catalog(coin_pairs).await
+    // Part 2 -- websocket_spawner
+    // Part 3 -- find_triangular_arbitrage
+    //find_triangular_arbitrage()
+    // Part 4 -- execute_trades
+
+    // split coin pairs into vecs of ten and run main_spawner enough times to use all of them
+    for i in 1..11 {
+        thread::spawn(|| {main_spawner(i)});
+    }
+
 }
