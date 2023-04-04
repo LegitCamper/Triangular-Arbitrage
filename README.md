@@ -12,7 +12,7 @@ Time spent so far:
 - Well it can, just not consistently
 - I need to find ways to make it faster (Maybe even use a faster language)
 
-
+# License
 
 Copyright (c) <year> <copyright holders>
 
