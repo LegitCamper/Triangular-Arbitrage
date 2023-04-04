@@ -16,6 +16,8 @@ use std::{
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
+    sync::mpsc,
+    sync::oneshot,
     task::JoinSet,
     task
 };
@@ -280,8 +282,6 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-
-
 fn validate_combination(pairs_list: &[String; 6]) -> bool {
     let pairs_list_len = pairs_list.len() - 1;
 
@@ -380,13 +380,6 @@ fn find_triangular_arbitrage() {
     println!("{:?}", triangular_pairs)
 }
 
-fn find_triangular_arbitrage_spawned() {
-    // loop will run forever
-    loop {
-        // TODO
-    }
-}
-
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
 fn new_pipe(fifo_path: &str) {
@@ -404,10 +397,31 @@ fn execute_trades() {
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
 
+// struct to represent the output of symbol data from websocket
+#[allow(non_snake_case)]
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
-struct WebsocketToRust {}
-#[derive(Debug, Serialize, Deserialize)]
-struct WebsocketRustToSerde {}
+struct KucoinCoinPrices {
+    type: String,
+    topic: String,
+    subject: String,
+    data: Box<KucoinCoinPrices>,
+    // This is a sub-struct
+    #[serde(deserialize_with = "as_u32")]
+    sequence: u32, 
+    #[serde(deserialize_with = "as_f64")]
+    price: f32,
+    #[serde(deserialize_with = "as_f64")]
+    size: f32,
+    #[serde(deserialize_with = "as_f64")]
+    bestAsk: f32,
+    #[serde(deserialize_with = "as_f64")]
+    bestAskSize: f32,
+    #[serde(deserialize_with = "as_f64")]
+    bestBid: f32,
+    #[serde(deserialize_with = "as_f64")]
+    bestBidSize: f32
+} 
 
 async fn kucoin_websocket(api_creds: KucoinCreds) {
     let empty_json_request = EmptyKucoinJson {
@@ -442,15 +456,30 @@ async fn kucoin_websocket(api_creds: KucoinCreds) {
     }
 }
 
-fn kucoin_websocket_spawner() {
-    // tokio task
-    // kucoin_websocket()
-}
-
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
-fn main_spawner(coin_pairs: Vec<String>) {
+// structs for message passing between tokio tasks
+struct websocket_to_validator {
+    //symobl_prices: // this should be the struct of the type that websocket returns
+}
+
+struct validator_to_buyer {
+    price: f32,
+    amount: f32,
+    // other order params
+}
+
+async fn main_spawner(coin_pairs: Vec<String>) {
     // use tokio tasks and channels to communticate between the fetcher, validator, and buyers 
+    let (tx, rx) = oneshot::channel(); // initates the channel
+    tokio::spawn(async move {
+        tx.send(3) // execute websocket and pass result through channel
+    });
+
+    match rx.await {
+        Ok(v) => println!("Got Websocket data...."), // validate/test the prices to find and arbitrage
+        Err(_) => println!("the sender dropped"),
+    }
 }
 
 // Runs all modules
@@ -480,7 +509,7 @@ async fn main() {
 
     // split coin pairs into vecs of ten and run main_spawner enough times to use all of them
     for i in 1..11 {
-        thread::spawn(|| {main_spawner(i)});
+        thread::spawn(move || {main_spawner(vec![i.to_string()])}); // might need to remove "move", alos have temp vec inplace of actual pairs
     }
 
 }
