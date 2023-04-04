@@ -227,18 +227,9 @@ struct KucoinCoins {
     takerCoefficient: f64,
     #[serde(deserialize_with = "as_f64")]
     makerCoefficient: f64,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct KucoinCoinsTime {
-    ticker: Vec<KucoinCoins>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct KucoinCoinsCode {
-    data: KucoinCoinsTime,
+    // recursive struct
+    data: Box<KucoinCoins>,
+    ticker: Box<KucoinCoins>
 }
 
 #[derive(Debug, Serialize)]
@@ -247,6 +238,10 @@ struct EmptyKucoinJson {
 }
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
+    // TODO
+    fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
+        *value
+    }
     let mut rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
         "/api/v1/market/allTickers".to_string(),
@@ -255,14 +250,16 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
         KucoinRequestType::Get,
     );
     match KucoinRequest::Get(kucoin_request).await {
-        Some(KucoinResponse) => {
-            let coin_pairs_struct: KucoinCoinsCode =
-                serde_json::from_str(KucoinResponse.as_str()).expect("JSON was not well-formatted");
+        Some(kucoin_response) => {
+            let coin_pairs_struct: KucoinCoins =
+                serde_json::from_str(kucoin_response.as_str()).expect("JSON was not well-formatted");
+            let coin_pairs = unbox(coin_pairs_struct.data.ticker);
+            println!("{:?}", coin_pairs);
 
             let mut coin_pairs: Vec<String> = Vec::new();
 
-            for i in coin_pairs_struct.data.ticker.iter() {
-                coin_pairs.push(i.symbol.clone());
+            for i in coin_pairs.iter() {
+                //coin_pairs.push(i.symbol.clone());
             }
             //println!("{:?}", coin_pairs);
             Some(coin_pairs)
@@ -273,18 +270,7 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-fn has_two_occurrences(arr: &[String], string: &str) -> bool {
-    let mut count = 0;
-    for s in arr {
-        if s == string {
-            count += 1;
-        }
-        if count > 2 {
-            return false;
-        }
-    }
-    count == 2
-}
+
 
 fn validate_combination(pairs_list: &[String; 6]) -> bool {
     let pairs_list_len = pairs_list.len() - 1;
@@ -292,7 +278,19 @@ fn validate_combination(pairs_list: &[String; 6]) -> bool {
     // ensures the pairs can chain together
     let mut chainable: bool = false;
     for i in pairs_list.iter() {
-        if has_two_occurrences(&pairs_list[..], i) {
+        if {
+            let arr: &[String] = &pairs_list[..];
+            let mut count = 0;
+            for s in arr {
+                if s == i {
+                    count += 1;
+                }
+                if count > 2 {
+                    return false;
+                }
+            }
+            count == 2
+        } {
             chainable = true
         } else {
             chainable = false;
