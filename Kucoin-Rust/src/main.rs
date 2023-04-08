@@ -192,7 +192,6 @@ impl KucoinRequest {
         let client = reqwest::Client::new();
         let res = client
             .post(&self.endpoint)
-            .headers(self.headers)
             .send()
             .await
             .expect("failed to post reqwest")
@@ -203,10 +202,25 @@ impl KucoinRequest {
     }
 }
 
+// make these three prettier with recursive structs or sum
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct KucoinCoins {
+struct KucoinCoinsL0 {
+    data: KucoinCoinsL1,
+}
+
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct KucoinCoinsL1 {
+    ticker: Vec<KucoinCoinsL2> 
+}
+
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct KucoinCoinsL2 {
     symbol: String,
     symbolName: String,
     #[serde(deserialize_with = "as_f64")]
@@ -236,10 +250,7 @@ struct KucoinCoins {
     #[serde(deserialize_with = "as_f64")]
     takerCoefficient: f64,
     #[serde(deserialize_with = "as_f64")]
-    makerCoefficient: f64,
-    // recursive struct
-    data: Box<KucoinCoins>,
-    ticker: Box<KucoinCoins>,
+    makerCoefficient: f64
 }
 
 #[derive(Debug, Serialize)]
@@ -248,10 +259,9 @@ struct EmptyKucoinJson {
 }
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
-    // TODO
-    fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
-        *value
-    }
+    // fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
+        // *value
+    // }
     let mut rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
         "/api/v1/market/allTickers".to_string(),
@@ -259,17 +269,18 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
         "Nothing to see here!".to_string(),
         KucoinRequestType::Get,
     );
-    println!("{:?}", kucoin_request);
     match KucoinRequest::Get(kucoin_request).await {
         Some(kucoin_response) => {
-            let coin_pairs_struct: KucoinCoins = serde_json::from_str(kucoin_response.as_str())
+            let coin_pairs_struct: KucoinCoinsL0 = serde_json::from_str(kucoin_response.as_str())
                 .expect("JSON was not well-formatted");
-            let coin_pairs = unbox(coin_pairs_struct.data.ticker);
+            let coin_pairs = coin_pairs_struct.data.ticker;
             println!("{:?}", coin_pairs);
 
+            // replace with a map and filter statment later
             let mut coin_pairs: Vec<String> = Vec::new();
 
             for i in coin_pairs.iter() {
+                println!("{:?}", coin_pairs);
                 //coin_pairs.push(i.symbol.clone());
             }
             //println!("{:?}", coin_pairs);
@@ -496,6 +507,7 @@ async fn main() {
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
+    // this needs to panic! if None enum
     let websocket_token = KucoinRequest::Get(construct_kucoin_request(
         "/api/v1/bullet-private".to_string(),
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
