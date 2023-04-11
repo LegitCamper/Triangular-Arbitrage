@@ -48,12 +48,12 @@ fn cwd_plus_path(path: String) -> String {
     format!("{}{}", cwd.to_owned(), path.to_owned())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct KucoinCreds<'a> {
-    api_key: &'a str,
-    api_passphrase: &'a str,
-    api_secret: &'a str,
-    api_key_version: &'a str,
+#[derive(Debug, Deserialize)]
+struct KucoinCreds {
+    api_key: String,
+    api_passphrase: String,
+    api_secret: String,
+    api_key_version: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -92,10 +92,10 @@ fn construct_kucoin_request(
     json: String,
     method: KucoinRequestType,
 ) -> KucoinRequest {
-    let json_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
-    let data = read_to_string(json_file_path).expect("unable to read KucoinKeys.json");
+    let creds_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
+    let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
     let api_creds: KucoinCreds =
-        serde_json::from_str::<KucoinCreds>(&data).expect("unable to parse KucoinKeys.json");
+        serde_json::from_reader(BufReader::new(creds_file)).expect("unable to parse KucoinKeys.json");
 
     let since_the_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -109,12 +109,12 @@ fn construct_kucoin_request(
                                                                                     // because it doest seem
                                                                                     // like the GET needs it
     let signature = hmac::sign(&signed_key, payload.as_bytes());
-    let b64_encoded_sig = BASE64.encode(signature.as_ref());
+    let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
     //println!("b64_encoded_sig: {}", b64_encoded_sig);
 
     // adding all the reqiured headers
     let mut headers = reqwest::header::HeaderMap::new();
-    // headers.insert(HeaderName::from_static("KC-API-KEY"), HeaderValue::from_static(&api_creds.api_key));
+    // headers.insert(HeaderName::from_static("KC-API-KEY"), HeaderValue::from_static(&api_creds.api_key.as_str()));
     // headers.insert(
     //     reqwest::header::HeaderName::from_static("KC-API-SIGN"),
     //     reqwest::header::HeaderValue::from_static(&'a b64_encoded_sig),
@@ -137,17 +137,21 @@ fn construct_kucoin_request(
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
     match method {
-        ref Post => KucoinRequest {
-            headers,
-            request: json,
-            method,
-            endpoint: url.to_string(),
+        ref Post => {
+            KucoinRequest {
+                    headers,
+                    request: json,
+                    method,
+                    endpoint: url.to_string(),
+                }
         },
-        ref Get => KucoinRequest {
-            headers,
-            request: json,
-            method,
-            endpoint: url.to_string(),
+        ref Get => {
+            KucoinRequest {
+                    headers,
+                    request: json,
+                    method,
+                    endpoint: url.to_string(),
+                }
         },
     }
 }
