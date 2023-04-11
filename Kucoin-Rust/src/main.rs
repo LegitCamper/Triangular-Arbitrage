@@ -49,11 +49,11 @@ fn cwd_plus_path(path: String) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct KucoinCreds {
-    api_key: String,
-    api_passphrase: String,
-    api_secret: String,
-    api_key_version: String,
+struct KucoinCreds<'a> {
+    api_key: &'a str,
+    api_passphrase: &'a str,
+    api_secret: &'a str,
+    api_key_version: &'a str,
 }
 
 #[derive(Serialize, Debug)]
@@ -88,7 +88,7 @@ struct KucoinRequest {
 }
 
 fn construct_kucoin_request(
-    endpoint: String,
+    endpoint: &str,
     json: String,
     method: KucoinRequestType,
 ) -> KucoinRequest {
@@ -97,13 +97,6 @@ fn construct_kucoin_request(
     let api_creds: KucoinCreds =
         serde_json::from_str::<KucoinCreds>(&data).expect("unable to parse KucoinKeys.json");
 
-    // Gets current time in milliseconds
-    //let since_the_epoch: String = DurationString::from(
-    //    SystemTime::now()
-    //        .duration_since(UNIX_EPOCH)
-    //        .expect("Time went backwards"),
-    //)
-    //.to_string();
     let since_the_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
@@ -121,10 +114,7 @@ fn construct_kucoin_request(
 
     // adding all the reqiured headers
     let mut headers = reqwest::header::HeaderMap::new();
-    // headers.insert(
-    // reqwest::header::HeaderName::from_static("KC-API-KEY"),
-    // reqwest::header::HeaderValue::from_static(&api_creds.api_key),
-    // );
+    // headers.insert(HeaderName::from_static("KC-API-KEY"), HeaderValue::from_static(&api_creds.api_key));
     // headers.insert(
     //     reqwest::header::HeaderName::from_static("KC-API-SIGN"),
     //     reqwest::header::HeaderValue::from_static(&'a b64_encoded_sig),
@@ -144,7 +134,7 @@ fn construct_kucoin_request(
 
     let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
     let url: Url = base_url
-        .join(&endpoint)
+        .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
     match method {
         ref Post => KucoinRequest {
@@ -166,7 +156,7 @@ impl KucoinRequest {
     async fn Get(self) -> Option<String> {
         let client = reqwest::Client::new();
         let res = client
-            .get(&self.endpoint)
+            .get(&*self.endpoint)
             .headers(self.headers)
             .json(&self.request)
             .send()
@@ -180,7 +170,7 @@ impl KucoinRequest {
     async fn OderPost(self) -> Option<String> {
         let client = reqwest::Client::new();
         client
-            .post(&self.endpoint)
+            .post(&*self.endpoint)
             .headers(self.headers)
             .json(&self.request)
             .send()
@@ -191,7 +181,7 @@ impl KucoinRequest {
     async fn Websocket(self) -> Option<String> {
         let client = reqwest::Client::new();
         let res = client
-            .post(&self.endpoint)
+            .post(&*self.endpoint)
             .send()
             .await
             .expect("failed to post reqwest")
@@ -264,7 +254,7 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
     // }
     let mut rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
-        "/api/v1/market/allTickers".to_string(),
+        "/api/v1/market/allTickers",
         //serde_json::from_str("{}").expect("Failed to Serialize"), // apeantly Kucoin Get requests for all tokens needs no params
         "Nothing to see here!".to_string(),
         KucoinRequestType::Get,
@@ -442,7 +432,7 @@ async fn kucoin_websocket(
     };
     // retreive temporary api token
     let websocket_info = construct_kucoin_request(
-        "/api/v1/bullet-public".to_string(),
+        "/api/v1/bullet-public",
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
     );
@@ -509,7 +499,7 @@ async fn main() {
 
     // this needs to panic! if None enum
     let websocket_token = KucoinRequest::Get(construct_kucoin_request(
-        "/api/v1/bullet-private".to_string(),
+        "/api/v1/bullet-private",
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
     ))
