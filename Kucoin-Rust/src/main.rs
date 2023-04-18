@@ -422,6 +422,27 @@ struct KucoinCoinPrices {
     bestBidSize: f64,
 }
 
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize)]
+struct websocket_detailsL1 {
+    data: websocket_detailsL2
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize)]
+struct websocket_detailsL2 {
+    token: String,
+    instanceServers: Vec<websocket_detailsL3>
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize)]
+struct websocket_detailsL3 {
+    endpoint: String,
+    pingInterval:i32,
+    pingTimeout: i32
+}
+
 async fn kucoin_websocket(
     // websocket_token: String,
     channel_writer: mpsc::Sender<KucoinCoinPrices>,
@@ -435,26 +456,31 @@ async fn kucoin_websocket(
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
     );
-    KucoinRequest::Get(websocket_info).await;
+    let websocket_info:websocket_detailsL1 = 
+        serde_json::from_str(&KucoinRequest::Websocket(websocket_info).await.unwrap())
+        .expect("Cant't parse from json");
+
+    let websocket_url = Url::parse(format!("{}?token={}", websocket_info.data.instanceServers[0].endpoint, websocket_info.data.token).as_str()).unwrap();
     let (mut socket, _response) =
-        connect(Url::parse("wss://ws-api-spot.kucoin.com/").unwrap()).expect("Can't connect");
-    // Write a message containing "Hello, Test!" to the server
+        connect(websocket_url).expect("Can't connect");
+    println!("Connected to the Kucoin websocket");
+    
     socket
-        .write_message(Message::Text("Hello, Test!".into()))
+        .write_message(Message::Text("Hello, Test!".into())) // THIS NEEDS TO BE A SEARILIZED REQUEST TO TO SUBSCRIBE TO ALL COINS
         .unwrap();
 
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
-        let msg = match socket.read_message().expect("Error reading message") {
-            tungstenite::Message::Text(s) => s,
-            _ => {
-                panic!()
-            }
-        };
-        println!("{:?}", msg);
-        let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("Can't parse to JSON");
-        // println!("{:?}", parsed);
-        channel_writer.send(parsed_msg).expect("Channel down!");
+        let msg = socket.read_message().expect("Error reading message");
+        println!("{}", msg)
+
+        // match parsed_msg {
+            // Ok(s) => {
+                // let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("failed to parse json");
+                // channel_writer.send(parsed_msg).expect("Channel down!"),
+            // }
+            // Err => println!("{:?}", s)
+        // }
     }
 }
 
