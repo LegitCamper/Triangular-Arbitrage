@@ -469,10 +469,20 @@ async fn kucoin_websocket(
         .write_message(Message::Text("Hello, Test!".into())) // THIS NEEDS TO BE A SEARILIZED REQUEST TO TO SUBSCRIBE TO ALL COINS
         .unwrap();
 
+    //     LIKE THIS
+    // {
+            // "id": 1545910660739,
+            // "type": "subscribe",
+            // "topic": "/market/ticker:all", 
+            // "privateChannel": false,
+            // "response": true
+        // }
+    // }
+
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
         let msg = socket.read_message().expect("Error reading message");
-        println!("{}", msg)
+        println!("{}", msg) //     RETURNS ERROR RIGHT NOW BECAUSE WELCOME MESSAGE IS WRONG
 
         // match parsed_msg {
             // Ok(s) => {
