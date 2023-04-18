@@ -269,13 +269,13 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
             let coin_pairs_struct: KucoinCoinsL0 = serde_json::from_str(kucoin_response.as_str())
                 .expect("JSON was not well-formatted");
             let coin_pairs = coin_pairs_struct.data.ticker;
-            println!("{:?}", coin_pairs);
+            // println!("{:?}", coin_pairs);
 
             // replace with a map and filter statment later
             let mut coin_pairs: Vec<String> = Vec::new();
 
             for i in coin_pairs.iter() {
-                println!("{:?}", coin_pairs);
+                // println!("{:?}", coin_pairs);
                 //coin_pairs.push(i.symbol.clone());
             }
             //println!("{:?}", coin_pairs);
@@ -382,7 +382,7 @@ fn find_triangular_arbitrage() {
     let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
     let triangular_pairs: CatalogStruct =
         serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
-    println!("{:?}", triangular_pairs)
+    // println!("{:?}", triangular_pairs)
 }
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
@@ -423,7 +423,7 @@ struct KucoinCoinPrices {
 }
 
 async fn kucoin_websocket(
-    websocket_token: String,
+    // websocket_token: String,
     channel_writer: mpsc::Sender<KucoinCoinPrices>,
 ) {
     let empty_json_request = EmptyKucoinJson {
@@ -445,16 +445,16 @@ async fn kucoin_websocket(
 
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
-        let msg = socket.read_message().expect("Error reading message");
-        let msg = match msg {
+        let msg = match socket.read_message().expect("Error reading message") {
             tungstenite::Message::Text(s) => s,
             _ => {
                 panic!()
             }
         };
-        let parsed: KucoinCoinPrices = serde_json::from_str(&msg).expect("Can't parse to JSON");
-        // println!("{:?}", parsed["result"]);
-        let response = channel_writer.send(parsed).expect("Channel down!");
+        println!("{:?}", msg);
+        let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("Can't parse to JSON");
+        // println!("{:?}", parsed);
+        channel_writer.send(parsed_msg).expect("Channel down!");
     }
 }
 
@@ -476,19 +476,20 @@ async fn main() {
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string(),
     };
+    // gets a list of all the current symbols
     let coin: Vec<String> = match get_tradable_coin_pairs().await {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
+    // NOT NEEDED
     // this needs to panic! if None enum
-    let websocket_token = KucoinRequest::Get(construct_kucoin_request(
-        "/api/v1/bullet-private",
-        serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
-        KucoinRequestType::Post,
-    ))
-    .await;
-    println!("{:?}", websocket_token);
+    // let websocket_token = KucoinRequest::Get(construct_kucoin_request(
+        // "/api/v1/bullet-private",
+        // serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
+        // KucoinRequestType::Post,
+    // ))
+    // .await;
 
     // Part 1 -- create_valid_pairs
     //create_valid_pairs_catalog(coin_pairs).await
@@ -497,16 +498,23 @@ async fn main() {
     //find_triangular_arbitrage()
     // Part 4 -- execute_trades
 
+    let mut handles = Vec::<std::thread::JoinHandle<()>>::new();
+        
     let (websocket_writer, websocket_reader) = mpsc::channel::<KucoinCoinPrices>(); // mpsc channel for websocket and validator
-    thread::spawn(|| kucoin_websocket(websocket_token.unwrap(), websocket_writer)); // downloads websocket data and passes it through channel to validator
-    thread::spawn(move || {
-        // use tokio tasks and channels to communticate between the fetcher, validator, and buyers
-        let (writer, reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
-        // thread::spawn(move || {
-            // loop {
-                // writer.send(3).expect("Channel closed!"); // execute websocket and pass result through channel
-            // }
-        // });
-        println!("{:?}", websocket_reader)
+    let websocket_thread = thread::spawn(move || {
+        kucoin_websocket(websocket_writer)//  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
     });
+    let (validator_writer, validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
+    let validator_thread = thread::spawn(move || {
+        while let Ok(msg) = websocket_reader.recv() {
+            println!("{:?}", msg)
+        }
+    });
+
+    // pauses while threads are running
+    websocket_thread.join().unwrap().await;
+    validator_thread.join().unwrap();
+    // loop {
+    //     thread::sleep(std::time::Duration::from_secs(5))
+    // }
 }
