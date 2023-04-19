@@ -17,6 +17,7 @@ use std::{
     //fmt::Write,
     //ffi::CString
     thread,
+    time::Duration,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -28,11 +29,16 @@ use tokio::{
 };
 //use futures_util::{future, pin_mut, StreamExt};
 //use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use tungstenite::{connect, Message};
+//use tungstenite::{connect, Message};
 //extern crate libc;
 use data_encoding::BASE64;
 use duration_string::DurationString;
 use itertools::Itertools;
+use message_io::{
+    network::{NetEvent, Transport},
+    // webscoket library
+    node::{self, NodeEvent},
+};
 use ring::{digest, hmac};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
@@ -450,6 +456,19 @@ struct kucoin_websocket_subscription {
     response: String,
 }
 
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize)]
+struct kucoin_webscoket_ping {
+    id: i32,
+    r#type: String,
+}
+
+// websocket responses
+enum Websocket_Signal {
+    Greet,
+    Ping,
+}
+
 async fn kucoin_websocket(
     // websocket_token: String,
     channel_writer: mpsc::Sender<KucoinCoinPrices>,
@@ -475,43 +494,71 @@ async fn kucoin_websocket(
         .as_str(),
     )
     .unwrap();
-    let (mut socket, _response) = connect(websocket_url).expect("Can't connect");
-    println!("Connected to the Kucoin websocket");
 
     // Searilize kucoin subscription
+    let kucoin_id: i32 = rand::thread_rng().gen_range(13..15);
     let subscription = json!(kucoin_websocket_subscription {
-        id: rand::thread_rng().gen_range(13..15),
+        id: kucoin_id,
         r#type: "subscribe".to_string(),
         topic: "/market/ticker:all".to_string(),
         privateChannel: "false".to_string(),
         response: "false".to_string(),
     });
+    // Searilize kucoin ping message
+    let ping = json!(kucoin_webscoket_ping {
+        id: kucoin_id,
+        r#type: "ping".to_string()
+    });
 
-    socket
-        .write_message(Message::Text(subscription.to_string())) // THIS NEEDS TO BE A SEARILIZED REQUEST TO TO SUBSCRIBE TO ALL COINS
-        .unwrap();
+    // Websocket stuff
+    let (handler, listener) = node::split();
+    let (server, _) = handler
+        .network()
+        .connect(Transport::Ws, websocket_url.to_string())
+        .expect("Failed to connect to websocket");
 
-    // Loop forever, handling parsing each message and passing it to the validator
-    loop {
-        let msg = socket.read_message().expect("Error reading message");
-        println!("{}", msg) //     RETURNS ERROR RIGHT NOW BECAUSE WELCOME MESSAGE IS WRONG
-
-        // match parsed_msg {
-        // Ok(s) => {
-        // let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("failed to parse json");
-        // channel_writer.send(parsed_msg).expect("Channel down!"),
-        // }
-        // Err => println!("{:?}", s)
-        // }
-    }
+    listener.for_each(move |event| match event {
+        NodeEvent::Network(net_event) => match net_event {
+            NetEvent::Connected(_endpoint, _ok) => {
+                handler.signals().send(Websocket_Signal::Greet);
+            }
+            NetEvent::Accepted(_, _) => unreachable!(), // Only generated when a listener accepts
+            NetEvent::Message(_endpoint, data) => {
+                println!("Received: {}", String::from_utf8_lossy(data));
+            }
+            NetEvent::Disconnected(_endpoint) => println!("Disconnected from Kucoin websocket"),
+        },
+        NodeEvent::Signal(signal) => match signal {
+            Websocket_Signal::Greet => {
+                handler
+                    .network()
+                    .send(server, subscription.to_string().as_bytes());
+                println!("Connected to Kucoin websocket");
+            }
+            Websocket_Signal::Ping => {
+                handler.network().send(
+                    server,
+                    websocket_info.data.instanceServers[0]
+                        .pingInterval
+                        .to_string()
+                        .as_bytes(),
+                );
+                println!("Pinged");
+            }
+        },
+    });
 }
 
+                handler.signals().send_with_timer(
+                    Websocket_Signal::Ping,
+                    Duration::from_secs(
+                        websocket_info.data.instanceServers[0]
+                            .pingInterval
+                            .try_into()
+                            .unwrap(),
+                    ),
+                );
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
-
-// structs for message passing between tokio tasks
-struct websocket_to_validator {
-    //symobl_prices: // this should be the struct of the type that websocket returns
-}
 
 struct validator_to_buyer {
     price: f32,
@@ -530,22 +577,6 @@ async fn main() {
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
-    // NOT NEEDED
-    // this needs to panic! if None enum
-    // let websocket_token = KucoinRequest::Get(construct_kucoin_request(
-    // "/api/v1/bullet-private",
-    // serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
-    // KucoinRequestType::Post,
-    // ))
-    // .await;
-
-    // Part 1 -- create_valid_pairs
-    //create_valid_pairs_catalog(coin_pairs).await
-    // Part 2 -- websocket_spawner
-    // Part 3 -- find_triangular_arbitrage
-    //find_triangular_arbitrage()
-    // Part 4 -- execute_trades
-
     let mut handles = Vec::<std::thread::JoinHandle<()>>::new();
 
     let (websocket_writer, websocket_reader) = mpsc::channel::<KucoinCoinPrices>(); // mpsc channel for websocket and validator
@@ -562,7 +593,4 @@ async fn main() {
     // pauses while threads are running
     websocket_thread.join().unwrap().await;
     validator_thread.join().unwrap();
-    // loop {
-    //     thread::sleep(std::time::Duration::from_secs(5))
-    // }
 }
