@@ -11,12 +11,12 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Error, Write},
     path::Path,
     process,
+    sync::mpsc,
     //os::unix::thread::JoinHandleExt,
     //marker::Tuple,
     //fmt::Write,
     //ffi::CString
     thread,
-    sync::mpsc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -35,6 +35,7 @@ use duration_string::DurationString;
 use itertools::Itertools;
 use ring::{digest, hmac};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::json;
 use serde_this_or_that::as_f64;
 use url::Url;
 
@@ -95,8 +96,8 @@ fn construct_kucoin_request(
 ) -> KucoinRequest {
     let creds_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
     let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
-    let api_creds: KucoinCreds =
-        serde_json::from_reader(BufReader::new(creds_file)).expect("unable to parse KucoinKeys.json");
+    let api_creds: KucoinCreds = serde_json::from_reader(BufReader::new(creds_file))
+        .expect("unable to parse KucoinKeys.json");
 
     let since_the_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -138,21 +139,17 @@ fn construct_kucoin_request(
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
     match method {
-        ref Post => {
-            KucoinRequest {
-                    headers,
-                    request: json,
-                    method,
-                    endpoint: url.to_string(),
-                }
+        ref Post => KucoinRequest {
+            headers,
+            request: json,
+            method,
+            endpoint: url.to_string(),
         },
-        ref Get => {
-            KucoinRequest {
-                    headers,
-                    request: json,
-                    method,
-                    endpoint: url.to_string(),
-                }
+        ref Get => KucoinRequest {
+            headers,
+            request: json,
+            method,
+            endpoint: url.to_string(),
         },
     }
 }
@@ -209,7 +206,7 @@ struct KucoinCoinsL0 {
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct KucoinCoinsL1 {
-    ticker: Vec<KucoinCoinsL2> 
+    ticker: Vec<KucoinCoinsL2>,
 }
 
 #[allow(non_snake_case)]
@@ -245,7 +242,7 @@ struct KucoinCoinsL2 {
     #[serde(deserialize_with = "as_f64")]
     takerCoefficient: f64,
     #[serde(deserialize_with = "as_f64")]
-    makerCoefficient: f64
+    makerCoefficient: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -255,7 +252,7 @@ struct EmptyKucoinJson {
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
     // fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
-        // *value
+    // *value
     // }
     let mut rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
@@ -425,22 +422,32 @@ struct KucoinCoinPrices {
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 struct websocket_detailsL1 {
-    data: websocket_detailsL2
+    data: websocket_detailsL2,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 struct websocket_detailsL2 {
     token: String,
-    instanceServers: Vec<websocket_detailsL3>
+    instanceServers: Vec<websocket_detailsL3>,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 struct websocket_detailsL3 {
     endpoint: String,
-    pingInterval:i32,
-    pingTimeout: i32
+    pingInterval: i32,
+    pingTimeout: i32,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize)]
+struct kucoin_websocket_subscription {
+    id: i32,
+    r#type: String,
+    topic: String,
+    privateChannel: String,
+    response: String,
 }
 
 async fn kucoin_websocket(
@@ -456,28 +463,33 @@ async fn kucoin_websocket(
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
     );
-    let websocket_info:websocket_detailsL1 = 
+    let websocket_info: websocket_detailsL1 =
         serde_json::from_str(&KucoinRequest::Websocket(websocket_info).await.unwrap())
-        .expect("Cant't parse from json");
+            .expect("Cant't parse from json");
 
-    let websocket_url = Url::parse(format!("{}?token={}", websocket_info.data.instanceServers[0].endpoint, websocket_info.data.token).as_str()).unwrap();
-    let (mut socket, _response) =
-        connect(websocket_url).expect("Can't connect");
+    let websocket_url = Url::parse(
+        format!(
+            "{}?token={}",
+            websocket_info.data.instanceServers[0].endpoint, websocket_info.data.token
+        )
+        .as_str(),
+    )
+    .unwrap();
+    let (mut socket, _response) = connect(websocket_url).expect("Can't connect");
     println!("Connected to the Kucoin websocket");
-    
-    socket
-        .write_message(Message::Text("Hello, Test!".into())) // THIS NEEDS TO BE A SEARILIZED REQUEST TO TO SUBSCRIBE TO ALL COINS
-        .unwrap();
 
-    //     LIKE THIS
-    // {
-            // "id": 1545910660739,
-            // "type": "subscribe",
-            // "topic": "/market/ticker:all", 
-            // "privateChannel": false,
-            // "response": true
-        // }
-    // }
+    // Searilize kucoin subscription
+    let subscription = json!(kucoin_websocket_subscription {
+        id: rand::thread_rng().gen_range(13..15),
+        r#type: "subscribe".to_string(),
+        topic: "/market/ticker:all".to_string(),
+        privateChannel: "false".to_string(),
+        response: "false".to_string(),
+    });
+
+    socket
+        .write_message(Message::Text(subscription.to_string())) // THIS NEEDS TO BE A SEARILIZED REQUEST TO TO SUBSCRIBE TO ALL COINS
+        .unwrap();
 
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
@@ -485,11 +497,11 @@ async fn kucoin_websocket(
         println!("{}", msg) //     RETURNS ERROR RIGHT NOW BECAUSE WELCOME MESSAGE IS WRONG
 
         // match parsed_msg {
-            // Ok(s) => {
-                // let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("failed to parse json");
-                // channel_writer.send(parsed_msg).expect("Channel down!"),
-            // }
-            // Err => println!("{:?}", s)
+        // Ok(s) => {
+        // let parsed_msg: KucoinCoinPrices = serde_json::from_str(&msg).expect("failed to parse json");
+        // channel_writer.send(parsed_msg).expect("Channel down!"),
+        // }
+        // Err => println!("{:?}", s)
         // }
     }
 }
@@ -521,9 +533,9 @@ async fn main() {
     // NOT NEEDED
     // this needs to panic! if None enum
     // let websocket_token = KucoinRequest::Get(construct_kucoin_request(
-        // "/api/v1/bullet-private",
-        // serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
-        // KucoinRequestType::Post,
+    // "/api/v1/bullet-private",
+    // serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
+    // KucoinRequestType::Post,
     // ))
     // .await;
 
@@ -535,10 +547,10 @@ async fn main() {
     // Part 4 -- execute_trades
 
     let mut handles = Vec::<std::thread::JoinHandle<()>>::new();
-        
+
     let (websocket_writer, websocket_reader) = mpsc::channel::<KucoinCoinPrices>(); // mpsc channel for websocket and validator
     let websocket_thread = thread::spawn(move || {
-        kucoin_websocket(websocket_writer)//  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
+        kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
     });
     let (validator_writer, validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
     let validator_thread = thread::spawn(move || {
