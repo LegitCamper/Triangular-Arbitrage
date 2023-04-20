@@ -3,45 +3,36 @@
 use core::future::poll_fn;
 // use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE, USER_AGENT};
+use reqwest::header::{HeaderMap};
 use std::{
-    borrow::Borrow,
     env,
-    fs::{read_to_string, remove_file, File},
-    io::{BufRead, BufReader, BufWriter, Error, Write},
+    fs::{remove_file, File},
+    io::{BufRead, BufReader, BufWriter},
     path::Path,
-    process,
     sync::mpsc,
     //os::unix::thread::JoinHandleExt,
     //marker::Tuple,
     //fmt::Write,
     //ffi::CString
     thread,
-    time::Duration,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    // sync::mpsc,
-    // sync::oneshot,
-    task,
-    task::JoinSet,
-};
+
 //use futures_util::{future, pin_mut, StreamExt};
-use futures::{stream, StreamExt}; // 0.3.13
+use futures::{StreamExt}; // 0.3.13
 // use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tungstenite::{connect, Message};
 //extern crate libc;
 use data_encoding::BASE64;
-use duration_string::DurationString;
+
 use itertools::Itertools;
 // use message_io::{
 // network::{NetEvent, Transport},
 // webscoket library
 // node::{self, NodeEvent},
 // };
-use ring::{digest, hmac};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use ring::{hmac};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_this_or_that::as_f64;
 use url::Url;
@@ -118,11 +109,11 @@ fn construct_kucoin_request(
                                                                                     // because it doest seem
                                                                                     // like the GET needs it
     let signature = hmac::sign(&signed_key, payload.as_bytes());
-    let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
+    let _b64_encoded_sig: String = BASE64.encode(signature.as_ref());
     //println!("b64_encoded_sig: {}", b64_encoded_sig);
 
     // adding all the reqiured headers
-    let mut headers = reqwest::header::HeaderMap::new();
+    let headers = reqwest::header::HeaderMap::new();
     // headers.insert(HeaderName::from_static("KC-API-KEY"), HeaderValue::from_static(&api_creds.api_key.as_str()));
     // headers.insert(
     //     reqwest::header::HeaderName::from_static("KC-API-SIGN"),
@@ -146,13 +137,13 @@ fn construct_kucoin_request(
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
     match method {
-        ref Post => KucoinRequest {
+        ref _Post => KucoinRequest {
             headers,
             request: json,
             method,
             endpoint: url.to_string(),
         },
-        ref Get => KucoinRequest {
+        ref _Get => KucoinRequest {
             headers,
             request: json,
             method,
@@ -261,7 +252,7 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
     // fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
     // *value
     // }
-    let mut rng = rand::thread_rng();
+    let _rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
         "/api/v1/market/allTickers",
         //serde_json::from_str("{}").expect("Failed to Serialize"), // apeantly Kucoin Get requests for all tokens needs no params
@@ -272,13 +263,13 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
         Some(kucoin_response) => {
             let coin_pairs_struct: KucoinCoinsL0 = serde_json::from_str(kucoin_response.as_str())
                 .expect("JSON was not well-formatted");
-            let coin_pairs = coin_pairs_struct.data.ticker;
+            let _coin_pairs = coin_pairs_struct.data.ticker;
             // println!("{:?}", coin_pairs);
 
             // replace with a map and filter statment later
-            let mut coin_pairs: Vec<String> = Vec::new();
+            let coin_pairs: Vec<String> = Vec::new();
 
-            for i in coin_pairs.iter() {
+            for _i in coin_pairs.iter() {
                 // println!("{:?}", coin_pairs);
                 //coin_pairs.push(i.symbol.clone());
             }
@@ -384,7 +375,7 @@ fn find_triangular_arbitrage() {
     //println!("{}", cwd() + "/Triangular_pairs.catalog");
     let json_file = Path::new(&json_file_path);
     let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
-    let triangular_pairs: CatalogStruct =
+    let _triangular_pairs: CatalogStruct =
         serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
     // println!("{:?}", triangular_pairs)
 }
@@ -392,7 +383,7 @@ fn find_triangular_arbitrage() {
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
 fn execute_trades() {
-    let mut restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
+    let _restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
     loop {
         // read named pip and execute orders
     }
@@ -472,7 +463,7 @@ enum Websocket_Signal {
 
 async fn kucoin_websocket(
     // websocket_token: String,
-    channel_writer: mpsc::Sender<KucoinCoinPrices>,
+    _channel_writer: mpsc::Sender<KucoinCoinPrices>,
 ) {
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string(),
@@ -506,7 +497,7 @@ async fn kucoin_websocket(
         response: "false".to_string(),
     });
     // Searilize kucoin ping message
-    let ping = json!(kucoin_webscoket_ping {
+    let _ping = json!(kucoin_webscoket_ping {
         id: kucoin_id,
         r#type: "ping".to_string()
     });
@@ -549,22 +540,22 @@ struct validator_to_buyer {
 
 #[tokio::main]
 async fn main() {
-    let empty_json_request = EmptyKucoinJson {
+    let _empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string(),
     };
     // gets a list of all the current symbols
-    let coin: Vec<String> = match get_tradable_coin_pairs().await {
+    let _coin: Vec<String> = match get_tradable_coin_pairs().await {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
-    let mut handles = Vec::<std::thread::JoinHandle<()>>::new();
+    let _handles = Vec::<std::thread::JoinHandle<()>>::new();
 
     let (websocket_writer, websocket_reader) = mpsc::channel::<KucoinCoinPrices>(); // mpsc channel for websocket and validator
     let websocket_thread = thread::spawn(move || {
         kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
     });
-    let (validator_writer, validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
+    let (_validator_writer, _validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
     let validator_thread = thread::spawn(move || {
         while let Ok(msg) = websocket_reader.recv() {
             println!("{:?}", msg)
