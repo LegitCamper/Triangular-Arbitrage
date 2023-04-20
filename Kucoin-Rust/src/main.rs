@@ -1,9 +1,9 @@
 // Remove warnings while building
+#[allow(unused_imports)]
 use core::future::poll_fn;
 // use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE, USER_AGENT};
-#[allow(unused_imports)]
 use std::{
     borrow::Borrow,
     env,
@@ -28,6 +28,7 @@ use tokio::{
     task::JoinSet,
 };
 //use futures_util::{future, pin_mut, StreamExt};
+use futures::{stream, StreamExt}; // 0.3.13
 // use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tungstenite::{connect, Message};
 //extern crate libc;
@@ -517,19 +518,20 @@ async fn kucoin_websocket(
         .write_message(Message::Text(subscription.to_string()))
         .unwrap();
 
-    // interval for when to send a ping to the websocket
-    let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10)); //this should be websocker_info.data.PingInterval
-
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
-        tokio::select! {
-            _ = heartbeat_interval.tick() => {
-                socket // ping json
-                    .write_message(Message::Ping(ping.to_string().into()))
-                    .unwrap();
-            }
-        }
+        // Ping the websocket
+        let interval = tokio::time::interval(Duration::from_millis(10)); //this should be a dynamic number from websocket_info
 
+        let forever = stream::unfold(interval, |mut interval| async {
+                interval.tick().await;
+                socket.write_message(Message::Text(ping.to_string())).unwrap();
+                Some(((), interval))
+            });
+
+        let now = std::time::Instant::now();
+        forever.for_each(|_| async {}).await;
+    
         let msg = socket.read_message().expect("Error reading message");
 
         if msg.is_close() {
