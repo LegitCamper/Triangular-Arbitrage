@@ -520,18 +520,6 @@ async fn kucoin_websocket(
 
     // Loop forever, handling parsing each message and passing it to the validator
     loop {
-        // Ping the websocket
-        let interval = tokio::time::interval(Duration::from_millis(10)); //this should be a dynamic number from websocket_info
-
-        let forever = stream::unfold(interval, |mut interval| async {
-                interval.tick().await;
-                socket.write_message(Message::Text(ping.to_string())).unwrap();
-                Some(((), interval))
-            });
-
-        let now = std::time::Instant::now();
-        forever.for_each(|_| async {}).await;
-    
         let msg = socket.read_message().expect("Error reading message");
 
         if msg.is_close() {
