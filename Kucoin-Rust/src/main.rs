@@ -21,10 +21,10 @@ use std::{
 //use futures_util::{future, pin_mut, StreamExt};
 use futures::{StreamExt}; // 0.3.13
 // use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use tungstenite::{connect, Message};
+// use tungstenite::{connect, Message};
+use workflow_websocket;
 //extern crate libc;
 use data_encoding::BASE64;
-
 use itertools::Itertools;
 // use message_io::{
 // network::{NetEvent, Transport},
@@ -497,37 +497,23 @@ async fn kucoin_websocket(
         response: "false".to_string(),
     });
     // Searilize kucoin ping message
-    let _ping = json!(kucoin_webscoket_ping {
+    let ping = json!(kucoin_webscoket_ping {
         id: kucoin_id,
         r#type: "ping".to_string()
     });
 
-    // Websocket stuff
-    let (mut socket, _response) =
-        connect(websocket_url.to_string()).expect("Can't connect to websocket");
-    socket // subscription json
-        .write_message(Message::Text(subscription.to_string()))
-        .unwrap();
+    // Webscoket stuff
+    let ws = workflow_websocket::client::WebSocket::new(&websocket_url.to_string(), workflow_websocket::client::Options::default());
+    ws.expect("Failed to connect to websocket").connect(true).await;
 
-    // Loop forever, handling parsing each message and passing it to the validator
-    loop {
-        let msg = socket.read_message().expect("Error reading message");
+    // Send messages (Pings and subscription)
+    let ws_send = ws.expect("Could not clone ws for sender").clone();
+    ws_send.send(workflow_websocket::client::Message::Text(ping.to_string())).await;
 
-        if msg.is_close() {
-            println!("The websocket closed unexpectedly");
-            panic!("Websocket crashed")
-        }
-        if msg.is_text() {
-            // let parsed_msg: KucoinCoinPrices = serde_json::from_str(msg);
-        }
-        println!("{}", msg)
+    
 
-        // try to parse the response into KucoinCoinPrices
-        // channel_writer.send(parsed_msg).expect("Channel down!"),
-        // }
-        // Err => println!("{:?}", s)
-        // }
-    }
+    // Recive messages (Symbol data)
+
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
