@@ -28,17 +28,17 @@ use tokio::{
     task::JoinSet,
 };
 //use futures_util::{future, pin_mut, StreamExt};
-//use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-//use tungstenite::{connect, Message};
+// use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tungstenite::{connect, Message};
 //extern crate libc;
 use data_encoding::BASE64;
 use duration_string::DurationString;
 use itertools::Itertools;
-use message_io::{
-    network::{NetEvent, Transport},
-    // webscoket library
-    node::{self, NodeEvent},
-};
+// use message_io::{
+// network::{NetEvent, Transport},
+// webscoket library
+// node::{self, NodeEvent},
+// };
 use ring::{digest, hmac};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
@@ -511,53 +511,44 @@ async fn kucoin_websocket(
     });
 
     // Websocket stuff
-    let (handler, listener) = node::split();
-    let (server, _) = handler
-        .network()
-        .connect(Transport::Ws, websocket_url.to_string())
-        .expect("Failed to connect to websocket");
+    let (mut socket, _response) =
+        connect(websocket_url.to_string()).expect("Can't connect to websocket");
+    socket // subscription json
+        .write_message(Message::Text(subscription.to_string()))
+        .unwrap();
 
-    listener.for_each(move |event| match event {
-        NodeEvent::Network(net_event) => match net_event {
-            NetEvent::Connected(_endpoint, _ok) => {
-                handler.signals().send(Websocket_Signal::Greet);
+    // interval for when to send a ping to the websocket
+    let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(10)); //this should be websocker_info.data.PingInterval
+
+    // Loop forever, handling parsing each message and passing it to the validator
+    loop {
+        tokio::select! {
+            _ = heartbeat_interval.tick() => {
+                socket // ping json
+                    .write_message(Message::Ping(ping.to_string().into()))
+                    .unwrap();
             }
-            NetEvent::Accepted(_, _) => unreachable!(), // Only generated when a listener accepts
-            NetEvent::Message(_endpoint, data) => {
-                println!("Received: {}", String::from_utf8_lossy(data));
-            }
-            NetEvent::Disconnected(_endpoint) => println!("Disconnected from Kucoin websocket"),
-        },
-        NodeEvent::Signal(signal) => match signal {
-            Websocket_Signal::Greet => {
-                handler
-                    .network()
-                    .send(server, subscription.to_string().as_bytes());
-                println!("Connected to Kucoin websocket");
-            }
-            Websocket_Signal::Ping => {
-                handler.network().send(
-                    server,
-                    websocket_info.data.instanceServers[0]
-                        .pingInterval
-                        .to_string()
-                        .as_bytes(),
-                );
-                println!("Pinged");
-            }
-        },
-    });
+        }
+
+        let msg = socket.read_message().expect("Error reading message");
+
+        if msg.is_close() {
+            println!("The websocket closed unexpectedly");
+            panic!("Websocket crashed")
+        }
+        if msg.is_text() {
+            // let parsed_msg: KucoinCoinPrices = serde_json::from_str(msg);
+        }
+        println!("{}", msg)
+
+        // try to parse the response into KucoinCoinPrices
+        // channel_writer.send(parsed_msg).expect("Channel down!"),
+        // }
+        // Err => println!("{:?}", s)
+        // }
+    }
 }
 
-                handler.signals().send_with_timer(
-                    Websocket_Signal::Ping,
-                    Duration::from_secs(
-                        websocket_info.data.instanceServers[0]
-                            .pingInterval
-                            .try_into()
-                            .unwrap(),
-                    ),
-                );
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
 struct validator_to_buyer {
