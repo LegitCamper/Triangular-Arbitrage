@@ -3,7 +3,7 @@
 use core::future::poll_fn;
 // use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
-use reqwest::header::{HeaderMap};
+use reqwest::header::HeaderMap;
 use std::{
     env,
     fs::{remove_file, File},
@@ -19,9 +19,10 @@ use std::{
 };
 
 //use futures_util::{future, pin_mut, StreamExt};
-use futures::{StreamExt}; // 0.3.13
-// use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-// use tungstenite::{connect, Message};
+use futures::StreamExt; // 0.3.13
+                        // use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+                        // use tungstenite::{connect, Message};
+use workflow_core;
 use workflow_websocket;
 //extern crate libc;
 use data_encoding::BASE64;
@@ -31,7 +32,7 @@ use itertools::Itertools;
 // webscoket library
 // node::{self, NodeEvent},
 // };
-use ring::{hmac};
+use ring::hmac;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_this_or_that::as_f64;
@@ -503,17 +504,33 @@ async fn kucoin_websocket(
     });
 
     // Webscoket stuff
-    let ws = workflow_websocket::client::WebSocket::new(&websocket_url.to_string(), workflow_websocket::client::Options::default());
-    ws.expect("Failed to connect to websocket").connect(true).await;
+    let ws = workflow_websocket::client::WebSocket::new(
+        &websocket_url.to_string(),
+        workflow_websocket::client::Options::default(),
+    );
+    ws.as_ref()
+        .expect("Failed to connect to websocket")
+        .connect(true)
+        .await;
 
     // Send messages (Pings and subscription)
     let ws_send = ws.expect("Could not clone ws for sender").clone();
-    ws_send.send(workflow_websocket::client::Message::Text(ping.to_string())).await;
-
-    
+    workflow_core::task::spawn(async move {
+        loop {
+            ws_send.send(workflow_websocket::client::Message::Text("he".to_string());
+            // .send(workflow_websocket::client::Message::Text(ping.to_string()))
+            // .await
+            // workflow_core::task::sleep(Duration::from_secs(10)).await;
+        }
+    });
 
     // Recive messages (Symbol data)
-
+    let ws_read = ws.expect("Could not clone ws for reader").clone();
+    workflow_core::task::spawn(async move {
+        loop {
+            // ws_read
+        }
+    })
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////

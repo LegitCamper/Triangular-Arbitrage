@@ -884,6 +884,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+ "workflow-core",
  "workflow-websocket",
 ]
 
