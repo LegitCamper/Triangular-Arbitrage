@@ -392,32 +392,6 @@ fn execute_trades() {
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
 
-// struct to represent the output of symbol data from websocket
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-struct KucoinCoinPrices {
-    types: String,
-    topic: String,
-    subject: String,
-    data: Box<KucoinCoinPrices>,
-    // This is a sub-struct
-    //#[serde(deserialize_with = "as_f64")]
-    sequence: u32,
-    #[serde(deserialize_with = "as_f64")]
-    price: f64,
-    #[serde(deserialize_with = "as_f64")]
-    size: f64,
-    #[serde(deserialize_with = "as_f64")]
-    bestAsk: f64,
-    #[serde(deserialize_with = "as_f64")]
-    bestAskSize: f64,
-    #[serde(deserialize_with = "as_f64")]
-    bestBid: f64,
-    #[serde(deserialize_with = "as_f64")]
-    bestBidSize: f64,
-}
-
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 struct websocket_detailsL1 {
@@ -462,9 +436,39 @@ enum Websocket_Signal {
     Ping,
 }
 
+// Kucoin websocket return - Serde
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize)]
+struct Kucoin_websocket_response {
+    r#type: String,
+    topic: String,
+    subject: String,
+    data: Kucoin_websocket_responseL1,
+}
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize)]
+struct Kucoin_websocket_responseL1 {
+    #[serde(deserialize_with = "as_f64")]
+    bestAsk: f64,
+    #[serde(deserialize_with = "as_f64")]
+    bestAskSize: f64,
+    #[serde(deserialize_with = "as_f64")]
+    bestBid: f64,
+    #[serde(deserialize_with = "as_f64")]
+    bestBidSize: f64,
+    #[serde(deserialize_with = "as_f64")]
+    price: f64,
+    #[serde(deserialize_with = "as_f64")]
+    sequence: f64,
+    #[serde(deserialize_with = "as_f64")]
+    size: f64,
+    #[serde(deserialize_with = "as_f64")]
+    time: f64,
+}
+
 async fn kucoin_websocket(
     // websocket_token: String,
-    channel_writer: mpsc::Sender<KucoinCoinPrices>,
+    channel_writer: mpsc::Sender<Kucoin_websocket_response>,
 ) {
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string(),
@@ -538,16 +542,20 @@ async fn kucoin_websocket(
         loop {
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
-                println!("{}", x)
+                if x.contains("welcome") {
+                    println!("{}", x)
+                } else if x.contains("message") {
+                    // println!("{}", x);
+                    let response: Kucoin_websocket_response =
+                        serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
+                    channel_writer.send(response).unwrap()
+                }
             }
-            // let response: websocket_detailsL1 = serde_json::from_str(response.text)
-            // channel_writer.send(response).unwrap()
         }
     });
-    tokio::time::sleep(std::time::Duration::MAX).await
 
     // wait for the tasks to finish (forever)
-    // futures::future::join_all(handles).await;
+    tokio::time::sleep(std::time::Duration::MAX).await
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
@@ -569,9 +577,7 @@ async fn main() {
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
-    let _handles = Vec::<std::thread::JoinHandle<()>>::new();
-
-    let (websocket_writer, websocket_reader) = mpsc::channel::<KucoinCoinPrices>(); // mpsc channel for websocket and validator
+    let (websocket_writer, websocket_reader) = mpsc::channel::<Kucoin_websocket_response>(); // mpsc channel for websocket and validator
     let websocket_thread = thread::spawn(move || {
         kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
     });
