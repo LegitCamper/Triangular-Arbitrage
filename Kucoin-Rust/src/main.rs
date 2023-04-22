@@ -517,20 +517,21 @@ async fn kucoin_websocket(
     let ws_send = ws.expect("Could not clone ws for sender").clone();
     workflow_core::task::spawn(async move {
         loop {
-            ws_send.send(workflow_websocket::client::Message::Text("he".to_string());
-            // .send(workflow_websocket::client::Message::Text(ping.to_string()))
-            // .await
+            ws_send
+                .send(workflow_websocket::client::Message::Text(ping.to_string()))
+                .await
+                .expect("Failed to send ping to websocket");
             // workflow_core::task::sleep(Duration::from_secs(10)).await;
         }
     });
 
     // Recive messages (Symbol data)
-    let ws_read = ws.expect("Could not clone ws for reader").clone();
-    workflow_core::task::spawn(async move {
-        loop {
-            // ws_read
-        }
-    })
+    // let ws_read = ws.expect("Could not clone ws for reader").clone();
+    // workflow_core::task::spawn(async move {
+    // loop {
+    // ws_read
+    // }
+    // })
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
