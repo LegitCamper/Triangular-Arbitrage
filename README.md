@@ -2,7 +2,8 @@
 Attempting Triangular Arbitrage
 
 Time spent so far: 
-[![wakatime](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage.svg)](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage)
+[![wakatime](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage.svg)](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage) Not accurate since I have switched to Helix,
+and Helix does not support plugings quite yet
 
 # Instructions (Linux Only)
 - Download the latest release and unzip it
