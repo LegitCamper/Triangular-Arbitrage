@@ -464,7 +464,7 @@ enum Websocket_Signal {
 
 async fn kucoin_websocket(
     // websocket_token: String,
-    _channel_writer: mpsc::Sender<KucoinCoinPrices>,
+    channel_writer: mpsc::Sender<KucoinCoinPrices>,
 ) {
     let empty_json_request = EmptyKucoinJson {
         string: "Nothing to see here!".to_string(),
@@ -512,26 +512,42 @@ async fn kucoin_websocket(
         .expect("Failed to connect to websocket")
         .connect(true)
         .await;
+    ws.as_ref()
+        .expect("")
+        .send(workflow_websocket::client::Message::Text(
+            subscription.to_string(),
+        ))
+        .await
+        .expect("Failed to subscribe to the websocket");
 
     // Send messages (Pings and subscription)
-    let ws_send = ws.expect("Could not clone ws for sender").clone();
+    let ws_send = ws.as_ref().expect("Could not clone ws for sender").clone();
     workflow_core::task::spawn(async move {
         loop {
             ws_send
                 .send(workflow_websocket::client::Message::Text(ping.to_string()))
                 .await
                 .expect("Failed to send ping to websocket");
-            // workflow_core::task::sleep(Duration::from_secs(10)).await;
+            workflow_core::task::sleep(std::time::Duration::from_secs(10)).await;
         }
     });
 
     // Recive messages (Symbol data)
-    // let ws_read = ws.expect("Could not clone ws for reader").clone();
-    // workflow_core::task::spawn(async move {
-    // loop {
-    // ws_read
-    // }
-    // })
+    let ws_read = ws.expect("Could not clone ws for reader").clone();
+    workflow_core::task::spawn(async move {
+        loop {
+            let response = ws_read.recv();
+            if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
+                println!("{}", x)
+            }
+            // let response: websocket_detailsL1 = serde_json::from_str(response.text)
+            // channel_writer.send(response).unwrap()
+        }
+    });
+    tokio::time::sleep(std::time::Duration::MAX).await
+
+    // wait for the tasks to finish (forever)
+    // futures::future::join_all(handles).await;
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
