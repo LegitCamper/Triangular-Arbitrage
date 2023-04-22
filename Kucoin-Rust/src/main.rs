@@ -49,6 +49,7 @@ fn cwd_plus_path(path: String) -> String {
     format!("{}{}", cwd.to_owned(), path.to_owned())
 }
 
+//////////////////////////////////////////////////// Kucoin Rest API /////////////////////////////////////////////////
 #[derive(Debug, Deserialize)]
 struct KucoinCreds {
     api_key: String,
@@ -250,9 +251,6 @@ struct EmptyKucoinJson {
 }
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
-    // fn unbox<KucoinCoins>(value: Box<KucoinCoins>) -> KucoinCoins {
-    // *value
-    // }
     let _rng = rand::thread_rng();
     let kucoin_request = construct_kucoin_request(
         "/api/v1/market/allTickers",
@@ -264,18 +262,15 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
         Some(kucoin_response) => {
             let coin_pairs_struct: KucoinCoinsL0 = serde_json::from_str(kucoin_response.as_str())
                 .expect("JSON was not well-formatted");
-            let _coin_pairs = coin_pairs_struct.data.ticker;
-            // println!("{:?}", coin_pairs);
+            let coin_pairs = coin_pairs_struct.data.ticker;
 
             // replace with a map and filter statment later
-            let coin_pairs: Vec<String> = Vec::new();
+            let mut new_coin_pairs: Vec<String> = Vec::new();
 
-            for _i in coin_pairs.iter() {
-                // println!("{:?}", coin_pairs);
-                //coin_pairs.push(i.symbol.clone());
+            for i in coin_pairs.iter() {
+                new_coin_pairs.push(i.symbol.clone());
             }
-            //println!("{:?}", coin_pairs);
-            Some(coin_pairs)
+            Some(new_coin_pairs)
         }
         None => None,
     }
@@ -283,103 +278,72 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-fn validate_combination(pairs_list: &[String; 6]) -> bool {
-    let pairs_list_len = pairs_list.len() - 1;
+async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]> {
+    let (tx, rx) = mpsc::channel(); // makes channel to pass pairs through
 
-    // ensures the pairs can chain together
-    let mut chainable: bool = false;
-    for i in pairs_list.iter() {
-        if {
-            let arr: &[String] = &pairs_list[..];
-            let mut count = 0;
-            for s in arr {
-                if s == i {
-                    count += 1;
-                }
-                if count > 2 {
-                    return false;
+    let validator = thread::Builder::new()
+        .name("Coin Pair Combinations Validator".to_string())
+        .spawn(move || {
+            for i in coin_pairs.iter() {
+                if !i.contains(STABLE_COINS[0]) {
+                    continue;
+                };
+                let i_split: [&str; 2] = i.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                for o in coin_pairs.iter() {
+                    if o == i || o.contains(STABLE_COINS[0]) {
+                        continue;
+                    };
+                    let o_split: [&str; 2] =
+                        o.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                    if o_split[0] != i_split[0]
+                        && o_split[0] != i_split[1]
+                        && o_split[1] != i_split[0]
+                        && o_split[1] != i_split[1]
+                    {
+                        continue;
+                    };
+                    for p in coin_pairs.iter() {
+                        if p == o || p == i || !p.contains(STABLE_COINS[0]) {
+                            continue;
+                        }
+                        let p_split: [&str; 2] =
+                            p.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                        if p_split[0] != o_split[0]
+                            && p_split[0] != o_split[1]
+                            && p_split[1] != o_split[0]
+                            && p_split[1] != o_split[1]
+                        {
+                            continue;
+                        }
+
+                        let valid_pair = [
+                            i_split[0].to_string(),
+                            i_split[1].to_string(),
+                            o_split[0].to_string(),
+                            o_split[1].to_string(),
+                            p_split[0].to_string(),
+                            p_split[1].to_string(),
+                        ];
+
+                        tx.send(valid_pair).unwrap();
+                        // println!("{:?}", valid_pair);
+                    }
                 }
             }
-            count == 2
-        } {
-            chainable = true
-        } else {
-            chainable = false;
-            break;
-        }
-    }
-
-    // ensures first and last pair have a stable coin
-    let pairs_list_middle: &[String] = &pairs_list[2..pairs_list_len - 1]; // gets slice of pairs_list
-    let mut stable: bool = false;
-    for i in STABLE_COINS.iter() {
-        let si = i.to_string();
-        if si == pairs_list[0]
-            || si == pairs_list[1] && si == pairs_list[pairs_list_len - 1]
-            || si == pairs_list[pairs_list_len] && pairs_list_middle.contains(&si) == false
-        {
-            stable = true;
-            //println!("{}", pairs_list.contains(&si));
-        }
-    }
-    if stable && chainable {
-        true
-    } else {
-        false
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CatalogStruct {
-    vec: Vec<[String; 6]>,
-}
-
-async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) {
-    // Deletes old pairs catalog and makes new file to write to
-    let catalog_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
-    if Path::new(&catalog_file_path).exists() {
-        remove_file(&catalog_file_path).expect("failed to remove Triangular_pairs.catalog");
-    };
+        });
+    // waits for thread to finish before sending valid pairs
     let mut output_list: Vec<[String; 6]> = Vec::new();
-
-    for i in coin_pairs.iter().combinations(3) {
-        let pair1: [&str; 2] = i[0].split("-").collect::<Vec<&str>>().try_into().unwrap();
-        let pair2: [&str; 2] = i[1].split("-").collect::<Vec<&str>>().try_into().unwrap();
-        let pair3: [&str; 2] = i[2].split("-").collect::<Vec<&str>>().try_into().unwrap();
-
-        let pairs_list = [
-            pair1[0].to_string(),
-            pair1[1].to_string(),
-            pair2[0].to_string(),
-            pair2[1].to_string(),
-            pair3[0].to_string(),
-            pair3[1].to_string(),
-        ];
-        if validate_combination(&pairs_list) == true {
-            output_list.push(pairs_list);
-        }
+    for received in rx {
+        output_list.push(received);
     }
-    serde_json::to_writer(
-        BufWriter::new(
-            File::create(cwd_plus_path("/Triangular_pairs.catalog".to_string()))
-                .expect("could not open catalog for writing"),
-        ),
-        &output_list,
-    )
-    .expect("Failed to write pair combinations to catalog");
+    output_list
 }
 
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
 
-fn find_triangular_arbitrage() {
-    let json_file_path = cwd_plus_path("/Triangular_pairs.catalog".to_string());
-    //println!("{}", cwd() + "/Triangular_pairs.catalog");
-    let json_file = Path::new(&json_file_path);
-    let file = File::open(json_file).expect("Triangular_pairs.catalog not found");
-    let _triangular_pairs: CatalogStruct =
-        serde_json::from_reader(file).expect("error while reading Triangular_pairs.catalog");
-    // println!("{:?}", triangular_pairs)
-}
+// fn find_triangular_arbitrage(all_coins: CatalogStruct) {
+// println!("{:?}", all_coins)
+// }
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
@@ -549,6 +513,8 @@ async fn kucoin_websocket(
                     let response: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(response).unwrap()
+                } else {
+                    println!("{}", x)
                 }
             }
         }
@@ -572,21 +538,32 @@ async fn main() {
         string: "Nothing to see here!".to_string(),
     };
     // gets a list of all the current symbols
-    let _coin: Vec<String> = match get_tradable_coin_pairs().await {
+    let all_coins: Vec<String> = match get_tradable_coin_pairs().await {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
 
+    // Gets valid pair combinations
+    let pair_combinations = create_valid_pairs_catalog(all_coins).await; // creates json with all the coins
+    println!("Generated Valid Coin Pairs successfully");
+
     let (websocket_writer, websocket_reader) = mpsc::channel::<Kucoin_websocket_response>(); // mpsc channel for websocket and validator
-    let websocket_thread = thread::spawn(move || {
-        kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
-    });
+    let websocket_thread = thread::Builder::new()
+        .name("Websocket Thread".to_string())
+        .spawn(move || {
+            kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
+        })
+        .unwrap();
     let (_validator_writer, _validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
-    let validator_thread = thread::spawn(move || {
-        while let Ok(msg) = websocket_reader.recv() {
-            println!("{:?}", msg)
-        }
-    });
+    let validator_thread = thread::Builder::new()
+        .name("Validator Thread".to_string())
+        .spawn(move || {
+            while let Ok(msg) = websocket_reader.recv() {
+                // println!("{:?}", msg)
+                // find_triangular_arbitrage()
+            }
+        })
+        .unwrap();
 
     // pauses while threads are running
     websocket_thread.join().unwrap().await;
