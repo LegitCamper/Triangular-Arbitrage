@@ -345,19 +345,38 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]>
 fn find_triangular_arbitrage(
     valid_coin_pairs: &Vec<[String; 6]>,
     coin_fees: CoinFees,
+    websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
     validator_writer: mpsc::Sender<validator_to_buyer>,
 ) {
-    println!("{:?}", valid_coin_pairs);
+    // skipping caluculation for fees - assuming KCS fees are enabled
+    println!("skipping caluculation for fees - assuming KCS fees are enabled");
+
+    // Define methode for storing current best prices
+    let mut coin_storage: HashMap<String, Kucoin_websocket_responseL1> = HashMap::new();
+    while let Ok(msg) = websocket_reader.recv() {
+        coin_storage.insert(msg.subject, msg.data);
+        // .or_insert(Kucoin_websocket_responseL1 {
+        //     bestAsk: 0.0,
+        //     bestAskSize: 0.0,
+        //     bestBid: 0.0,
+        //     bestBidSize: 0.0,
+        //     price: 0.0,
+        //     sequence: 0.0,
+        //     size: 0.0,
+        //     time: 0.0,
+        // });
+        // println!("{:?}", coin_storage)
+    }
 }
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-fn execute_trades() {
-    let _restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
-    loop {
-        // read named pip and execute orders
-    }
-}
+// fn execute_trades() {
+// let _restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
+// loop {
+// read named pip and execute orders
+// }
+// }
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
 
@@ -585,10 +604,12 @@ async fn main() {
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
-            while let Ok(msg) = websocket_reader.recv() {
-                println!("{:?}", msg);
-                find_triangular_arbitrage(&pair_combinations, coin_fees, validator_writer.clone())
-            }
+            find_triangular_arbitrage(
+                &pair_combinations,
+                coin_fees,
+                websocket_reader,
+                validator_writer.clone(),
+            );
         })
         .unwrap();
 
