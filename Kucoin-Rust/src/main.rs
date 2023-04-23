@@ -5,8 +5,9 @@ use core::future::poll_fn;
 use rand::prelude::*;
 use reqwest::header::HeaderMap;
 use std::{
+    collections::HashMap,
     env,
-    fs::{remove_file, File},
+    fs::{read_to_string, remove_file, File},
     io::{BufRead, BufReader, BufWriter},
     path::Path,
     sync::mpsc,
@@ -39,7 +40,7 @@ use serde_this_or_that::as_f64;
 use url::Url;
 
 // Configurations
-const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
+const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // this is static rn so dont add to the list
 
 fn cwd_plus_path(path: String) -> String {
     let cwd = env::current_dir()
@@ -341,9 +342,13 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]>
 
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
 
-// fn find_triangular_arbitrage(all_coins: CatalogStruct) {
-// println!("{:?}", all_coins)
-// }
+fn find_triangular_arbitrage(
+    valid_coin_pairs: &Vec<[String; 6]>,
+    coin_fees: CoinFees,
+    validator_writer: mpsc::Sender<validator_to_buyer>,
+) {
+    println!("{:?}", valid_coin_pairs);
+}
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
@@ -526,10 +531,28 @@ async fn kucoin_websocket(
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
+#[allow(dead_code)]
 struct validator_to_buyer {
     price: f32,
     amount: f32,
     // other order params
+}
+
+#[derive(Debug, Deserialize)]
+struct CoinFees {
+    class_a: CoinFeesL1,
+    class_b: CoinFeesL1,
+    class_c: CoinFeesL1,
+}
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+struct CoinFeesL1 {
+    regular_maker: f64,
+    regular_taker: f64,
+    KCS_maker: f64,
+    KCS_taker: f64,
+    coins: Vec<String>,
 }
 
 #[tokio::main]
@@ -542,6 +565,10 @@ async fn main() {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
+    let coin_fees_path = cwd_plus_path("/coinfees.json".to_string());
+    let coin_fees_string = read_to_string(coin_fees_path).expect("Unable to read file");
+    let coin_fees: CoinFees =
+        serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
 
     // Gets valid pair combinations
     let pair_combinations = create_valid_pairs_catalog(all_coins).await; // creates json with all the coins
@@ -554,13 +581,13 @@ async fn main() {
             kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
         })
         .unwrap();
-    let (_validator_writer, _validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
+    let (validator_writer, _validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
             while let Ok(msg) = websocket_reader.recv() {
-                // println!("{:?}", msg)
-                // find_triangular_arbitrage()
+                println!("{:?}", msg);
+                find_triangular_arbitrage(&pair_combinations, coin_fees, validator_writer.clone())
             }
         })
         .unwrap();
