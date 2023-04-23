@@ -3,6 +3,5 @@
 *.bin
 *.build
 *.dist
-*.json
 *target*
-
+KucoinKeys.json
