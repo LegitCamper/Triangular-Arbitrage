@@ -349,34 +349,34 @@ fn find_triangular_arbitrage(
     validator_writer: mpsc::Sender<validator_to_buyer>,
 ) {
     // skipping caluculation for fees - assuming KCS fees are enabled
-    println!("skipping caluculation for fees - assuming KCS fees are enabled");
+    // println!("skipping caluculation for fees - assuming KCS fees are enabled");
 
     // Define methode for storing current best prices
     let mut coin_storage: HashMap<String, Kucoin_websocket_responseL1> = HashMap::new();
     while let Ok(msg) = websocket_reader.recv() {
         coin_storage.insert(msg.subject, msg.data);
-        // .or_insert(Kucoin_websocket_responseL1 {
-        //     bestAsk: 0.0,
-        //     bestAskSize: 0.0,
-        //     bestBid: 0.0,
-        //     bestBidSize: 0.0,
-        //     price: 0.0,
-        //     sequence: 0.0,
-        //     size: 0.0,
-        //     time: 0.0,
-        // });
-        // println!("{:?}", coin_storage)
+
+        // main validator loop
+        for i in valid_coin_pairs {
+            // loop through data and chekc for arbs
+            if coin_storage.get(&format!("{}-{}", i[0], i[1])).is_some()
+                && coin_storage.get(&format!("{}-{}", i[2], i[3])).is_some()
+                && coin_storage.get(&format!("{}-{}", i[4], i[5])).is_some()
+            {
+                // anything in here has been garenteed to be in coin_storage
+                println!("{:?}", i);
+            }
+        }
     }
 }
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-// fn execute_trades() {
-// let _restricted_pairs: Vec<String> = Vec::new(); // Holds pairs that I dont want to trade during runtime
-// loop {
-// read named pip and execute orders
-// }
-// }
+fn execute_trades(validator_reader: mpsc::Receiver<validator_to_buyer>) {
+    // loop {
+    // read named pip and execute orders
+    // }
+}
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
 
@@ -503,7 +503,8 @@ async fn kucoin_websocket(
     ws.as_ref()
         .expect("Failed to connect to websocket")
         .connect(true)
-        .await;
+        .await
+        .unwrap();
     ws.as_ref()
         .expect("")
         .send(workflow_websocket::client::Message::Text(
@@ -530,15 +531,13 @@ async fn kucoin_websocket(
         loop {
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
-                if x.contains("welcome") {
-                    println!("{}", x)
-                } else if x.contains("message") {
+                if x.contains("message") {
                     // println!("{}", x);
                     let response: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(response).unwrap()
                 } else {
-                    println!("{}", x)
+                    println!("Webosocket Response: {}", x)
                 }
             }
         }
@@ -600,7 +599,7 @@ async fn main() {
             kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
         })
         .unwrap();
-    let (validator_writer, _validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
+    let (validator_writer, validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
@@ -608,12 +607,17 @@ async fn main() {
                 &pair_combinations,
                 coin_fees,
                 websocket_reader,
-                validator_writer.clone(),
+                validator_writer,
             );
         })
+        .unwrap();
+    let ordering_thread = thread::Builder::new()
+        .name("Ordering Thread".to_string())
+        .spawn(move || execute_trades(validator_reader))
         .unwrap();
 
     // pauses while threads are running
     websocket_thread.join().unwrap().await;
     validator_thread.join().unwrap();
+    ordering_thread.join().unwrap();
 }
