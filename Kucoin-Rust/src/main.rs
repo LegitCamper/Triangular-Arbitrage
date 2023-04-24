@@ -40,7 +40,8 @@ use serde_this_or_that::as_f64;
 use url::Url;
 
 // Configurations
-const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // this is static rn so dont add to the list
+const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // TODO: this is static rn so dont add to the list
+const STARING_AMOUNT: f64 = 100.0; // Staring amount in USD
 
 fn cwd_plus_path(path: String) -> String {
     let cwd = env::current_dir()
@@ -285,45 +286,47 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]>
     let validator = thread::Builder::new()
         .name("Coin Pair Combinations Validator".to_string())
         .spawn(move || {
-            for i in coin_pairs.iter() {
-                if !i.contains(STABLE_COINS[0]) {
+            for pair1 in coin_pairs.iter() {
+                if !pair1.contains(STABLE_COINS[0]) {
+                    // TODO: make dynamic incase I deal with more stable coins
                     continue;
                 };
-                let i_split: [&str; 2] = i.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                for o in coin_pairs.iter() {
-                    if o == i || o.contains(STABLE_COINS[0]) {
+                let pair1_split: [&str; 2] =
+                    pair1.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                for pair2 in coin_pairs.iter() {
+                    if pair2 == pair1 || pair2.contains(STABLE_COINS[0]) {
                         continue;
                     };
-                    let o_split: [&str; 2] =
-                        o.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                    if o_split[0] != i_split[0]
-                        && o_split[0] != i_split[1]
-                        && o_split[1] != i_split[0]
-                        && o_split[1] != i_split[1]
+                    let pair2_split: [&str; 2] =
+                        pair2.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                    if pair2_split[0] != pair1_split[0]
+                        && pair2_split[0] != pair1_split[1]
+                        && pair2_split[1] != pair1_split[0]
+                        && pair2_split[1] != pair1_split[1]
                     {
                         continue;
                     };
-                    for p in coin_pairs.iter() {
-                        if p == o || p == i || !p.contains(STABLE_COINS[0]) {
+                    for pair3 in coin_pairs.iter() {
+                        if pair3 == pair2 || pair3 == pair1 || !pair3.contains(STABLE_COINS[0]) {
                             continue;
                         }
-                        let p_split: [&str; 2] =
-                            p.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                        if p_split[0] != o_split[0]
-                            && p_split[0] != o_split[1]
-                            && p_split[1] != o_split[0]
-                            && p_split[1] != o_split[1]
+                        let pair3_split: [&str; 2] =
+                            pair3.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                        if pair3_split[0] != pair2_split[0]
+                            && pair3_split[0] != pair2_split[1]
+                            && pair3_split[1] != pair2_split[0]
+                            && pair3_split[1] != pair2_split[1]
                         {
                             continue;
                         }
 
                         let valid_pair = [
-                            i_split[0].to_string(),
-                            i_split[1].to_string(),
-                            o_split[0].to_string(),
-                            o_split[1].to_string(),
-                            p_split[0].to_string(),
-                            p_split[1].to_string(),
+                            pair1_split[0].to_string(),
+                            pair1_split[1].to_string(),
+                            pair2_split[0].to_string(),
+                            pair2_split[1].to_string(),
+                            pair3_split[0].to_string(),
+                            pair3_split[1].to_string(),
                         ];
 
                         tx.send(valid_pair).unwrap();
@@ -342,6 +345,87 @@ async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]>
 
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
 
+#[derive(Debug)]
+enum ArbOrd {
+    Buy(String, String),
+    Sell(String, String),
+}
+
+// TODO: should calulate this during catalog build in the future to prevent waisted IO
+fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
+    let mut order: Vec<ArbOrd> = vec![];
+    // get first order
+    if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
+        order.push(ArbOrd::Buy(
+            coin_pair[0].to_owned(),
+            coin_pair[1].to_owned(),
+        ));
+    } else if coin_pair[1] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
+        order.push(ArbOrd::Sell(
+            coin_pair[0].to_owned(),
+            coin_pair[1].to_owned(),
+        ));
+    }
+    // get second order
+    if coin_pair[2] == coin_pair[4] || coin_pair[2] == coin_pair[5] {
+        order.push(ArbOrd::Buy(
+            coin_pair[2].to_owned(),
+            coin_pair[3].to_owned(),
+        ));
+    } else if coin_pair[3] == coin_pair[4] || coin_pair[3] == coin_pair[5] {
+        order.push(ArbOrd::Sell(
+            coin_pair[2].to_owned(),
+            coin_pair[3].to_owned(),
+        ));
+    }
+    // get third order
+    if coin_pair[4] == coin_pair[0] || coin_pair[4] == coin_pair[1] {
+        order.push(ArbOrd::Buy(
+            coin_pair[4].to_owned(),
+            coin_pair[5].to_owned(),
+        ));
+    } else if coin_pair[5] == coin_pair[0] || coin_pair[5] == coin_pair[1] {
+        order.push(ArbOrd::Sell(
+            coin_pair[4].to_owned(),
+            coin_pair[5].to_owned(),
+        ));
+    }
+    order
+}
+
+fn calculate_profitablity(
+    order: Vec<ArbOrd>,
+    coin_storage: &HashMap<String, Kucoin_websocket_responseL1>,
+) -> f64 {
+    // TODO: make stable coins dynamic incase I add more
+    // transaction 1
+    let mut coin_amount = match &order[0] {
+        ArbOrd::Buy(pair1, pair2) => {
+            STARING_AMOUNT / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+        }
+        ArbOrd::Sell(pair1, pair2) => {
+            STARING_AMOUNT * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+        }
+    };
+    coin_amount = match &order[1] {
+        ArbOrd::Buy(pair1, pair2) => {
+            coin_amount / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+        }
+        ArbOrd::Sell(pair1, pair2) => {
+            coin_amount * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+        }
+    };
+    coin_amount = match &order[2] {
+        ArbOrd::Buy(pair1, pair2) => {
+            coin_amount / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+        }
+        ArbOrd::Sell(pair1, pair2) => {
+            coin_amount * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+        }
+    };
+    coin_amount
+}
+
 fn find_triangular_arbitrage(
     valid_coin_pairs: &Vec<[String; 6]>,
     coin_fees: CoinFees,
@@ -357,14 +441,26 @@ fn find_triangular_arbitrage(
         coin_storage.insert(msg.subject, msg.data);
 
         // main validator loop
-        for i in valid_coin_pairs {
+        for pairs in valid_coin_pairs {
             // loop through data and chekc for arbs
-            if coin_storage.get(&format!("{}-{}", i[0], i[1])).is_some()
-                && coin_storage.get(&format!("{}-{}", i[2], i[3])).is_some()
-                && coin_storage.get(&format!("{}-{}", i[4], i[5])).is_some()
+            if coin_storage
+                .get(&format!("{}-{}", pairs[0], pairs[1]))
+                .is_some()
+                && coin_storage
+                    .get(&format!("{}-{}", pairs[2], pairs[3]))
+                    .is_some()
+                && coin_storage
+                    .get(&format!("{}-{}", pairs[4], pairs[5]))
+                    .is_some()
             {
                 // anything in here has been garenteed to be in coin_storage
-                println!("{:?}", i);
+                // TODO: Consider checking timestamp here. future iterations
+                let order_order = find_order_order(pairs.to_vec());
+                let profit = calculate_profitablity(order_order, &coin_storage);
+                if (profit - STARING_AMOUNT) >= 0.01 {
+                    // validator_writer.send()
+                    println!("profit: {profit}");
+                }
             }
         }
     }
