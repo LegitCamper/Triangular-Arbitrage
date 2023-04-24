@@ -430,7 +430,7 @@ fn find_triangular_arbitrage(
     valid_coin_pairs: &Vec<[String; 6]>,
     coin_fees: CoinFees,
     websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
-    validator_writer: mpsc::Sender<validator_to_buyer>,
+    validator_writer: mpsc::Sender<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>,
 ) {
     // skipping caluculation for fees - assuming KCS fees are enabled
     // println!("skipping caluculation for fees - assuming KCS fees are enabled");
@@ -456,9 +456,16 @@ fn find_triangular_arbitrage(
                 // anything in here has been garenteed to be in coin_storage
                 // TODO: Consider checking timestamp here. future iterations
                 let order_order = find_order_order(pairs.to_vec());
-                let profit = calculate_profitablity(order_order, &coin_storage);
-                if (profit - STARING_AMOUNT) >= 0.01 {
-                    // validator_writer.send()
+                let profit = calculate_profitablity(order_order, &coin_storage) - STARING_AMOUNT;
+                if profit >= 0.01 {
+                    validator_writer.send((
+                        &order_order[..],
+                        vec![
+                            coin_storage[&format!("{}-{}", pairs[0], pairs[1])].clone(),
+                            coin_storage[&format!("{}-{}", pairs[2], pairs[3])].clone(),
+                            coin_storage[&format!("{}-{}", pairs[4], pairs[5])].clone(),
+                        ],
+                    ));
                     println!("profit: {profit}");
                 }
             }
@@ -468,7 +475,7 @@ fn find_triangular_arbitrage(
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-fn execute_trades(validator_reader: mpsc::Receiver<validator_to_buyer>) {
+fn execute_trades(validator_reader: mpsc::Receiver<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>) {
     // loop {
     // read named pip and execute orders
     // }
@@ -529,6 +536,7 @@ struct Kucoin_websocket_response {
     subject: String,
     data: Kucoin_websocket_responseL1,
 }
+#[derive(Clone)]
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
 struct Kucoin_websocket_responseL1 {
@@ -631,6 +639,7 @@ async fn kucoin_websocket(
                     // println!("{}", x);
                     let response: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
+                    println!("{:?}", response); // TODO: remove this
                     channel_writer.send(response).unwrap()
                 } else {
                     println!("Webosocket Response: {}", x)
@@ -644,13 +653,6 @@ async fn kucoin_websocket(
 }
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
-
-#[allow(dead_code)]
-struct validator_to_buyer {
-    price: f32,
-    amount: f32,
-    // other order params
-}
 
 #[derive(Debug, Deserialize)]
 struct CoinFees {
@@ -695,7 +697,8 @@ async fn main() {
             kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
         })
         .unwrap();
-    let (validator_writer, validator_reader) = mpsc::channel::<validator_to_buyer>(); // initates the channel
+    let (validator_writer, validator_reader) =
+        mpsc::channel::<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
