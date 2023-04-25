@@ -43,15 +43,8 @@ use url::Url;
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // TODO: this is static rn so dont add to the list
 const STARING_AMOUNT: f64 = 100.0; // Staring amount in USD
 
-fn cwd_plus_path(path: String) -> String {
-    let cwd = env::current_dir()
-        .expect("Cannot get CWD")
-        .display()
-        .to_string();
-    format!("{}{}", cwd.to_owned(), path.to_owned())
-}
-
 //////////////////////////////////////////////////// Kucoin Rest API /////////////////////////////////////////////////
+
 #[derive(Debug, Deserialize)]
 struct KucoinCreds {
     api_key: String,
@@ -64,12 +57,7 @@ struct KucoinCreds {
 enum KucoinRequestType {
     Get,
     Post,
-    WebsocketToken,
-}
-
-#[derive(Serialize, Debug)]
-enum KucoinRequestPost {
-    Order(KucoinRequestOrderPost),
+    OrderPost,
     WebsocketToken,
 }
 
@@ -83,20 +71,12 @@ struct KucoinRequestOrderPost {
     client_id: u32,
 }
 
-#[derive(Debug)]
-struct KucoinRequest {
-    headers: HeaderMap,
-    request: String,
-    method: KucoinRequestType,
-    endpoint: String,
-}
-
-fn construct_kucoin_request(
+async fn kucoin_request(
     endpoint: &str,
     json: String,
     method: KucoinRequestType,
-) -> KucoinRequest {
-    let creds_file_path = cwd_plus_path("/KucoinKeys.json".to_string());
+) -> Option<String> {
+    let creds_file_path = "KucoinKeys.json".to_string();
     let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
     let api_creds: KucoinCreds = serde_json::from_reader(BufReader::new(creds_file))
         .expect("unable to parse KucoinKeys.json");
@@ -140,59 +120,57 @@ fn construct_kucoin_request(
     let url: Url = base_url
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
-    match method {
-        ref _Post => KucoinRequest {
-            headers,
-            request: json,
-            method,
-            endpoint: url.to_string(),
-        },
-        ref _Get => KucoinRequest {
-            headers,
-            request: json,
-            method,
-            endpoint: url.to_string(),
-        },
-    }
-}
 
-impl KucoinRequest {
-    async fn Get(self) -> Option<String> {
-        let client = reqwest::Client::new();
-        let res = client
-            .get(&*self.endpoint)
-            .headers(self.headers)
-            .json(&self.request)
-            .send()
-            .await
-            .expect("failed to get reqwest")
-            .text()
-            .await
-            .expect("failed to get payload");
-        Some(res)
-    }
-    async fn OderPost(self) -> Option<String> {
-        let client = reqwest::Client::new();
+    // makes http client 
+    let client = reqwest::Client::new();
+
+    match method {
+        KucoinRequestType::Post => {
+            let res = client
+                .post(url)
+                .send()
+                .await
+                .expect("failed to post reqwest")
+                .text()
+                .await
+                .expect("failed to get payload");
+            Some(res)
+        },
+        KucoinRequestType::Get => {
+            let res = client
+                .get(url)
+                .headers(headers)
+                .json(&json)
+                .send()
+                .await
+                .expect("failed to get reqwest")
+                .text()
+                .await
+                .expect("failed to get payload");
+            Some(res)
+        },
+        KucoinRequestType::WebsocketToken => {
+            let res = client
+                .post(url)
+                .send()
+                .await
+                .expect("failed to post reqwest")
+                .text()
+                .await
+                .expect("failed to get payload");
+            Some(res)
+        },
+        KucoinRequestType::OrderPost => {
         client
-            .post(&*self.endpoint)
-            .headers(self.headers)
-            .json(&self.request)
+            .post(url)
+            .headers(headers)
+            .json(&json)
             .send()
             .await
             .expect("failed to post reqwest");
         None
-    }
-    async fn Websocket(self) -> Option<String> {
-        let client = reqwest::Client::new();
-        let res = client
-            .post(&*self.endpoint)
-            .send()
-            .await
-            .expect("failed to post reqwest")
-            .text()
-            .await
-            .expect("failed to get payload");
-        Some(res)
+        }
+        
     }
 }
 
@@ -253,20 +231,18 @@ struct EmptyKucoinJson {
 }
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
-    let _rng = rand::thread_rng();
-    let kucoin_request = construct_kucoin_request(
+    let kucoin_response = kucoin_request(
         "/api/v1/market/allTickers",
-        //serde_json::from_str("{}").expect("Failed to Serialize"), // apeantly Kucoin Get requests for all tokens needs no params
         "Nothing to see here!".to_string(),
         KucoinRequestType::Get,
     );
-    match KucoinRequest::Get(kucoin_request).await {
+    match kucoin_response.await {
         Some(kucoin_response) => {
             let coin_pairs_struct: KucoinCoinsL0 = serde_json::from_str(kucoin_response.as_str())
                 .expect("JSON was not well-formatted");
             let coin_pairs = coin_pairs_struct.data.ticker;
 
-            // replace with a map and filter statment later
+            // TODO: replace with a map and filter statment later
             let mut new_coin_pairs: Vec<String> = Vec::new();
 
             for i in coin_pairs.iter() {
@@ -280,7 +256,12 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-async fn create_valid_pairs_catalog(coin_pairs: Vec<String>) -> Vec<[String; 6]> {
+async fn create_valid_pairs_catalog() -> Vec<[String; 6]> {
+        // gets a list of all the current symbols
+    let coin_pairs: Vec<String> = match get_tradable_coin_pairs().await {
+        Some(x) => x,
+        None => panic!("Failed connect to Kucoin and retrive list of coins"),
+    };
     let (tx, rx) = mpsc::channel(); // makes channel to pass pairs through
 
     let validator = thread::Builder::new()
@@ -354,6 +335,7 @@ enum ArbOrd {
 // TODO: should calulate this during catalog build in the future to prevent waisted IO
 fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
     let mut order: Vec<ArbOrd> = vec![];
+    
     // get first order
     if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
         order.push(ArbOrd::Buy(
@@ -428,7 +410,7 @@ fn calculate_profitablity(
 
 fn find_triangular_arbitrage(
     valid_coin_pairs: &Vec<[String; 6]>,
-    coin_fees: CoinFees,
+    // coin_fees: CoinFees,
     websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
     validator_writer: mpsc::Sender<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>,
 ) {
@@ -458,14 +440,14 @@ fn find_triangular_arbitrage(
                 let order_order = find_order_order(pairs.to_vec());
                 let profit = calculate_profitablity(order_order, &coin_storage) - STARING_AMOUNT;
                 if profit >= 0.01 {
-                    validator_writer.send((
-                        &order_order[..],
-                        vec![
-                            coin_storage[&format!("{}-{}", pairs[0], pairs[1])].clone(),
-                            coin_storage[&format!("{}-{}", pairs[2], pairs[3])].clone(),
-                            coin_storage[&format!("{}-{}", pairs[4], pairs[5])].clone(),
-                        ],
-                    ));
+                    // validator_writer.send((
+                    //     &order_order[..],
+                    //     vec![
+                    //         coin_storage[&format!("{}-{}", pairs[0], pairs[1])].clone(),
+                    //         coin_storage[&format!("{}-{}", pairs[2], pairs[3])].clone(),
+                    //         coin_storage[&format!("{}-{}", pairs[4], pairs[5])].clone(),
+                    //     ],
+                    // ));
                     println!("profit: {profit}");
                 }
             }
@@ -566,14 +548,15 @@ async fn kucoin_websocket(
         string: "Nothing to see here!".to_string(),
     };
     // retreive temporary api token
-    let websocket_info = construct_kucoin_request(
+    let websocket_info: websocket_detailsL1 = match kucoin_request(
         "/api/v1/bullet-public",
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
-    );
-    let websocket_info: websocket_detailsL1 =
-        serde_json::from_str(&KucoinRequest::Websocket(websocket_info).await.unwrap())
-            .expect("Cant't parse from json");
+    ).await {
+        Some(x) =>
+            serde_json::from_str(&x).expect("Cant't parse from json"),
+        None => panic!("Did not get valid response from kucoin")
+    };
 
     let websocket_url = Url::parse(
         format!(
@@ -673,21 +656,14 @@ struct CoinFeesL1 {
 
 #[tokio::main]
 async fn main() {
-    let _empty_json_request = EmptyKucoinJson {
-        string: "Nothing to see here!".to_string(),
-    };
-    // gets a list of all the current symbols
-    let all_coins: Vec<String> = match get_tradable_coin_pairs().await {
-        Some(x) => x,
-        None => panic!("Failed connect to Kucoin and retrive list of coins"),
-    };
-    let coin_fees_path = cwd_plus_path("/coinfees.json".to_string());
-    let coin_fees_string = read_to_string(coin_fees_path).expect("Unable to read file");
-    let coin_fees: CoinFees =
-        serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
+    // Dont need coin_fees because I assume they pay fees with KCS
+    // let coin_fees_path = cwd_plus_path("/coinfees.json".to_string());
+    // let coin_fees_string = read_to_string(coin_fees_path).expect("Unable to read file");
+    // let coin_fees: CoinFees =
+        // serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
 
     // Gets valid pair combinations
-    let pair_combinations = create_valid_pairs_catalog(all_coins).await; // creates json with all the coins
+    let pair_combinations = create_valid_pairs_catalog().await; // creates json with all the coins
     println!("Generated Valid Coin Pairs successfully");
 
     let (websocket_writer, websocket_reader) = mpsc::channel::<Kucoin_websocket_response>(); // mpsc channel for websocket and validator
@@ -704,7 +680,7 @@ async fn main() {
         .spawn(move || {
             find_triangular_arbitrage(
                 &pair_combinations,
-                coin_fees,
+                // coin_fees,
                 websocket_reader,
                 validator_writer,
             );
