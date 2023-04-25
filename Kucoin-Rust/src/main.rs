@@ -256,7 +256,7 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-async fn create_valid_pairs_catalog() -> Vec<[String; 6]> {
+async fn create_valid_pairs_catalog() -> Vec<([&String; 3],[String; 6])> {
         // gets a list of all the current symbols
     let coin_pairs: Vec<String> = match get_tradable_coin_pairs().await {
         Some(x) => x,
@@ -301,14 +301,15 @@ async fn create_valid_pairs_catalog() -> Vec<[String; 6]> {
                             continue;
                         }
 
-                        let valid_pair = [
-                            pair1_split[0].to_string(),
+                        let valid_pair = (
+                            [pair1, pair2, pair3],
+                            [pair1_split[0].to_string(),
                             pair1_split[1].to_string(),
                             pair2_split[0].to_string(),
                             pair2_split[1].to_string(),
                             pair3_split[0].to_string(),
-                            pair3_split[1].to_string(),
-                        ];
+                            pair3_split[1].to_string()],
+                        );
 
                         tx.send(valid_pair).unwrap();
                         // println!("{:?}", valid_pair);
@@ -317,18 +318,18 @@ async fn create_valid_pairs_catalog() -> Vec<[String; 6]> {
             }
         });
     // waits for thread to finish before sending valid pairs
-    let mut output_list: Vec<[String; 6]> = Vec::new();
+    let mut output_list: Vec<([&String; 3], [String; 6])> = Vec::new();
     for received in rx {
         output_list.push(received);
     }
-    output_list
+    output_list.clone()
 }
 
 /////////////////////////////////////////////////////////  Find_Triangular_Arbitrage  /////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ArbOrd {
-    Buy(String, String),
+    Buy(String, String), // pair1, pair2, price, size
     Sell(String, String),
 }
 
@@ -375,80 +376,99 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
     order
 }
 
-fn calculate_profitablity(
-    order: Vec<ArbOrd>,
+// TODO: This assumes they are selling more than I am buying
+fn calculate_profitablity( //This also returns price and size
+    pair_strings: &Strings,
+    order: &Vec<ArbOrd>,
     coin_storage: &HashMap<String, Kucoin_websocket_responseL1>,
-) -> f64 {
+) -> (f64, f64, f64) { //profit, price, size
     // TODO: make stable coins dynamic incase I add more
     // transaction 1
     let mut coin_amount = match &order[0] {
         ArbOrd::Buy(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+            (STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
+                coin_storage[&pair_strings[0]].bestAsk,
+                coin_storage[&pair_strings[0]].price,
+            )
         }
         ArbOrd::Sell(pair1, pair2) => {
-            STARING_AMOUNT * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+            (STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid,
+                coin_storage[&pair_strings[0]].bestBid,
+                coin_storage[&pair_strings[0]].price,
+            )
         }
     };
+    // Transaction 2
     coin_amount = match &order[1] {
         ArbOrd::Buy(pair1, pair2) => {
-            coin_amount / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+            (STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk,
+                coin_storage[&pair_strings[1]].bestAsk,
+                coin_storage[&pair_strings[1]].price,
+            )
         }
         ArbOrd::Sell(pair1, pair2) => {
-            coin_amount * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+            (STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid,
+                coin_storage[&pair_strings[1]].bestBid,
+                coin_storage[&pair_strings[1]].price,
+            )
         }
     };
+    // Transaction 3
     coin_amount = match &order[2] {
         ArbOrd::Buy(pair1, pair2) => {
-            coin_amount / coin_storage[&format!("{}-{}", pair1, pair2)].bestAsk
+            (STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk,
+                coin_storage[&pair_strings[2]].bestAsk,
+                coin_storage[&pair_strings[2]].price,
+            )
         }
         ArbOrd::Sell(pair1, pair2) => {
-            coin_amount * coin_storage[&format!("{}-{}", pair1, pair2)].bestBid
+            (STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid,
+                coin_storage[&pair_strings[2]].bestBid,
+                coin_storage[&pair_strings[2]].price,
+            )
         }
     };
     coin_amount
 }
 
 fn find_triangular_arbitrage(
-    valid_coin_pairs: &Vec<[String; 6]>,
+    valid_coin_pairs: &Vec<([&String; 3],[String; 6])>,
     // coin_fees: CoinFees,
     websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
-    validator_writer: mpsc::Sender<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>,
+    validator_writer: mpsc::Sender<Vec<order_details>>,
 ) {
     // skipping caluculation for fees - assuming KCS fees are enabled
     // println!("skipping caluculation for fees - assuming KCS fees are enabled");
-
+    
     // Define methode for storing current best prices
     let mut coin_storage: HashMap<String, Kucoin_websocket_responseL1> = HashMap::new();
     while let Ok(msg) = websocket_reader.recv() {
         coin_storage.insert(msg.subject, msg.data);
 
         // main validator loop
-        for pairs in valid_coin_pairs {
+        for pairs_tuple in valid_coin_pairs {    
+            let (pairs, pairs_split) = pairs_tupl;
             // loop through data and chekc for arbs
             if coin_storage
-                .get(&format!("{}-{}", pairs[0], pairs[1]))
+                .get(&pairs[0])
                 .is_some()
                 && coin_storage
-                    .get(&format!("{}-{}", pairs[2], pairs[3]))
+                    .get(&pairs[1])
                     .is_some()
                 && coin_storage
-                    .get(&format!("{}-{}", pairs[4], pairs[5]))
+                    .get(&pairs[2])
                     .is_some()
             {
                 // anything in here has been garenteed to be in coin_storage
                 // TODO: Consider checking timestamp here. future iterations
                 let order_order = find_order_order(pairs.to_vec());
-                let profit = calculate_profitablity(order_order, &coin_storage) - STARING_AMOUNT;
-                if profit >= 0.01 {
-                    // validator_writer.send((
-                    //     &order_order[..],
-                    //     vec![
-                    //         coin_storage[&format!("{}-{}", pairs[0], pairs[1])].clone(),
-                    //         coin_storage[&format!("{}-{}", pairs[2], pairs[3])].clone(),
-                    //         coin_storage[&format!("{}-{}", pairs[4], pairs[5])].clone(),
-                    //     ],
-                    // ));
-                    println!("profit: {profit}");
+                let profit = calculate_profitablity(&pair_strings, &order_order, &coin_storage);
+                if profit.0 - STARING_AMOUNT >= 0.01 {
+                    // orders = Vec[ArbOrd, (
+                        
+                    // ), (), ()]
+                    // validator_writer.send(order_order);
+                    // println!("profit: {profit}");
                 }
             }
         }
@@ -457,10 +477,10 @@ fn find_triangular_arbitrage(
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-fn execute_trades(validator_reader: mpsc::Receiver<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>) {
-    // loop {
-    // read named pip and execute orders
-    // }
+fn execute_trades(validator_reader: mpsc::Receiver<Vec<order_details>>) {
+    loop {
+        println!("READ FROM VALIDATOR: {:?}", validator_reader)
+    }
 }
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
@@ -674,7 +694,7 @@ async fn main() {
         })
         .unwrap();
     let (validator_writer, validator_reader) =
-        mpsc::channel::<(&[ArbOrd], Vec<Kucoin_websocket_responseL1>)>(); // initates the channel
+        mpsc::channel::<Vec<order_details>>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
