@@ -71,11 +71,7 @@ struct KucoinRequestOrderPost {
     client_id: u32,
 }
 
-async fn kucoin_request(
-    endpoint: &str,
-    json: String,
-    method: KucoinRequestType,
-) -> Option<String> {
+async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType) -> Option<String> {
     let creds_file_path = "KucoinKeys.json".to_string();
     let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
     let api_creds: KucoinCreds = serde_json::from_reader(BufReader::new(creds_file))
@@ -121,7 +117,7 @@ async fn kucoin_request(
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
 
-    // makes http client 
+    // makes http client
     let client = reqwest::Client::new();
 
     match method {
@@ -135,7 +131,7 @@ async fn kucoin_request(
                 .await
                 .expect("failed to get payload");
             Some(res)
-        },
+        }
         KucoinRequestType::Get => {
             let res = client
                 .get(url)
@@ -148,7 +144,7 @@ async fn kucoin_request(
                 .await
                 .expect("failed to get payload");
             Some(res)
-        },
+        }
         KucoinRequestType::WebsocketToken => {
             let res = client
                 .post(url)
@@ -159,18 +155,17 @@ async fn kucoin_request(
                 .await
                 .expect("failed to get payload");
             Some(res)
-        },
-        KucoinRequestType::OrderPost => {
-        client
-            .post(url)
-            .headers(headers)
-            .json(&json)
-            .send()
-            .await
-            .expect("failed to post reqwest");
-        None
         }
-        
+        KucoinRequestType::OrderPost => {
+            client
+                .post(url)
+                .headers(headers)
+                .json(&json)
+                .send()
+                .await
+                .expect("failed to post reqwest");
+            None
+        }
     }
 }
 
@@ -256,8 +251,8 @@ async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
 
-async fn create_valid_pairs_catalog() -> Vec<([String; 3],[String; 6])> {
-        // gets a list of all the current symbols
+async fn create_valid_pairs_catalog() -> Vec<([String; 3], [String; 6])> {
+    // gets a list of all the current symbols
     let coin_pairs: Vec<String> = match get_tradable_coin_pairs().await {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
@@ -303,12 +298,14 @@ async fn create_valid_pairs_catalog() -> Vec<([String; 3],[String; 6])> {
 
                         let valid_pair = (
                             [pair1.to_owned(), pair2.to_owned(), pair3.to_owned()],
-                            [pair1_split[0].to_string(),
-                            pair1_split[1].to_string(),
-                            pair2_split[0].to_string(),
-                            pair2_split[1].to_string(),
-                            pair3_split[0].to_string(),
-                            pair3_split[1].to_string()],
+                            [
+                                pair1_split[0].to_string(),
+                                pair1_split[1].to_string(),
+                                pair2_split[0].to_string(),
+                                pair2_split[1].to_string(),
+                                pair3_split[0].to_string(),
+                                pair3_split[1].to_string(),
+                            ],
                         );
 
                         tx.send(valid_pair).unwrap();
@@ -336,7 +333,7 @@ enum ArbOrd {
 // TODO: should calulate this during catalog build in the future to prevent waisted IO
 fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
     let mut order: Vec<ArbOrd> = vec![];
-    
+
     // get first order
     if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
         order.push(ArbOrd::Buy(
@@ -377,95 +374,86 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
 }
 
 // TODO: This assumes they are selling more than I am buying
-fn calculate_profitablity( //This also returns price and size
+fn calculate_profitablity(
+    //This also returns price and size
     pair_strings: [String; 3],
     order: &Vec<ArbOrd>,
     coin_storage: &HashMap<String, Kucoin_websocket_responseL1>,
-) -> f64 { //profit, price, size
+) -> f64 {
+    //profit, price, size
     // TODO: make stable coins dynamic incase I add more
     // transaction 1
     let mut coin_amount = match &order[0] {
-        ArbOrd::Buy(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk
-        }
-        ArbOrd::Sell(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid
-        }
+        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
+        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid,
     };
     // Transaction 2
     coin_amount = match &order[1] {
-        ArbOrd::Buy(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk
-        }
-        ArbOrd::Sell(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid
-        }
+        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk,
+        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid,
     };
     // Transaction 3
     coin_amount = match &order[2] {
-        ArbOrd::Buy(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk
-        }
-        ArbOrd::Sell(pair1, pair2) => {
-            STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid
-        }
+        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk,
+        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid,
     };
     coin_amount
 }
 
-#[derice(Debug)]
+#[derive(Debug)]
 struct Order_struct {
-    Side: ArbOrd,
-    Price: f64,
-    Size: f64,
+    side: ArbOrd,
+    price: f64,
+    size: f64,
 }
 
 fn find_triangular_arbitrage(
-    valid_coin_pairs: &Vec<([String; 3],[String; 6])>,
+    valid_coin_pairs: &Vec<([String; 3], [String; 6])>,
     // coin_fees: CoinFees,
     websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
-    validator_writer: mpsc::Sender<Vec<order_details>>,
+    validator_writer: mpsc::Sender<Vec<Order_struct>>,
 ) {
     // skipping caluculation for fees - assuming KCS fees are enabled
     // println!("skipping caluculation for fees - assuming KCS fees are enabled");
-    
+
     // Define methode for storing current best prices
     let mut coin_storage: HashMap<String, Kucoin_websocket_responseL1> = HashMap::new();
     while let Ok(msg) = websocket_reader.recv() {
         coin_storage.insert(msg.subject, msg.data);
         // main validator loop
-        for pairs_tuple in valid_coin_pairs {    
-            
+        for pairs_tuple in valid_coin_pairs {
             let (pairs, pairs_split) = pairs_tuple;
-            
+
             // loop through data and chekc for arbs
-            if coin_storage
-                .get(&pairs[0])
-                .is_some()
-                && coin_storage
-                    .get(&pairs[1])
-                    .is_some()
-                && coin_storage
-                    .get(&pairs[2])
-                    .is_some()
+            if coin_storage.get(&pairs[0]).is_some()
+                && coin_storage.get(&pairs[1]).is_some()
+                && coin_storage.get(&pairs[2]).is_some()
             {
                 // anything in here has been garenteed to be in coin_storage
                 // TODO: Consider checking timestamp here. future iterations
                 let orders_order = find_order_order(pairs_split.to_vec());
-                let profit = calculate_profitablity(pairs.clone(), &orders_order, &coin_storage) - STARING_AMOUNT;
+                let profit = calculate_profitablity(pairs.clone(), &orders_order, &coin_storage)
+                    - STARING_AMOUNT;
                 if profit >= 0.01 {
-                    orders = vec![];
-                    for Side in orders_order {
-                        match Side(p1, p2) {
-                            ArbOrd::Buy => {
-                                orders.push(Order_struct{Side: i, Price: coin_storage.get(format!("{}-{}", &p1, &p2)).bestAsk, Size: price: coin_storage.get(format!("{}-{}", &p1, &p2)).size})
-                            }
-                            ArbOrd::Sell(p1, p2) => {
-                                orders.push(Order_struct{Side: i,Price: coin_storage.get(format!("{}-{}", p1, p2)).bestBid, Size: price: coin_storage.get(format!("{}-{}", p1, p2)).size})
-                            }
+                    let mut orders = vec![];
+                    for side in orders_order {
+                        match side {
+                            ArbOrd::Buy(ref p1, ref p2) => orders.push(Order_struct {
+                                side: side.clone(),
+                                price: coin_storage
+                                    .get(&format!("{}-{}", &p1, &p2))
+                                    .unwrap()
+                                    .bestAsk,
+                                size: coin_storage.get(&format!("{}-{}", p1, p2)).unwrap().size,
+                            }),
+                            ArbOrd::Sell(ref p1, ref p2) => orders.push(Order_struct {
+                                side: side.clone(),
+                                price: coin_storage.get(&format!("{}-{}", p1, p2)).unwrap().bestBid,
+                                size: coin_storage.get(&format!("{}-{}", p1, p2)).unwrap().size,
+                            }),
                         }
                     }
-                    validator_writer.send(order_order);
+                    validator_writer.send(orders);
                     // println!("profit: {profit}");
                 }
             }
@@ -475,10 +463,10 @@ fn find_triangular_arbitrage(
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-fn execute_trades(validator_reader: mpsc::Receiver<Vec<order_details>>) {
-    loop {
-        println!("READ FROM VALIDATOR: {:?}", validator_reader)
-    }
+fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
+    // loop {
+    println!("READ FROM VALIDATOR: {:?}", validator_reader)
+    // }
 }
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
@@ -570,10 +558,11 @@ async fn kucoin_websocket(
         "/api/v1/bullet-public",
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
         KucoinRequestType::Post,
-    ).await {
-        Some(x) =>
-            serde_json::from_str(&x).expect("Cant't parse from json"),
-        None => panic!("Did not get valid response from kucoin")
+    )
+    .await
+    {
+        Some(x) => serde_json::from_str(&x).expect("Cant't parse from json"),
+        None => panic!("Did not get valid response from kucoin"),
     };
 
     let websocket_url = Url::parse(
@@ -678,7 +667,7 @@ async fn main() {
     // let coin_fees_path = cwd_plus_path("/coinfees.json".to_string());
     // let coin_fees_string = read_to_string(coin_fees_path).expect("Unable to read file");
     // let coin_fees: CoinFees =
-        // serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
+    // serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
 
     // Gets valid pair combinations
     let pair_combinations = create_valid_pairs_catalog().await; // creates json with all the coins
@@ -691,8 +680,7 @@ async fn main() {
             kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
         })
         .unwrap();
-    let (validator_writer, validator_reader) =
-        mpsc::channel::<Vec<order_details>>(); // initates the channel
+    let (validator_writer, validator_reader) = mpsc::channel::<Vec<Order_struct>>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
         .spawn(move || {
