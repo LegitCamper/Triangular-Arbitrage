@@ -488,7 +488,7 @@ async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
         // Iterates through each order in msg
         for order in msg {
             let json_order = match order.side {
-                ArbOrd::Buy(pair1, _pair2) => KucoinRequestOrderPost {
+                ArbOrd::Buy(pair1, pair2) => KucoinRequestOrderPost {
                     timeInForce: "FOK".to_string(),
                     size: order.size,
                     price: order.price,
