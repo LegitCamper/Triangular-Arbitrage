@@ -42,6 +42,7 @@ use url::Url;
 // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // TODO: this is static rn so dont add to the list
 const STARING_AMOUNT: f64 = 100.0; // Staring amount in USD
+const MINIMUN_PROFIT: f64 = 0.1; // in USD
 
 //////////////////////////////////////////////////// Kucoin Rest API /////////////////////////////////////////////////
 
@@ -295,8 +296,22 @@ async fn create_valid_pairs_catalog() -> Vec<([String; 3], [String; 6])> {
                             ],
                         );
 
-                        tx.send(valid_pair).unwrap();
-                        // println!("{:?}", valid_pair);
+                        // adding check to ensure there are only two of every symbol - Last check
+                        let mut equal_symbols = true;
+                        let mut pair_count = HashMap::new();
+                        for pair in valid_pair.1.iter() {
+                            let count = pair_count.entry(pair).or_insert(0);
+                            *count += 1;
+                        }
+                        for value in pair_count.values() {
+                            if value != &2 {
+                                equal_symbols = false;
+                            }
+                        }
+
+                        if equal_symbols {
+                            tx.send(valid_pair).unwrap();
+                        }
                     }
                 }
             }
@@ -372,18 +387,18 @@ fn calculate_profitablity(
     // transaction 1
     let mut coin_amount: f64;
     coin_amount = match &order[0] {
-        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT * coin_storage[&pair_strings[0]].bestBid,
+        ArbOrd::Buy(_, _) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
+        ArbOrd::Sell(_, _) => STARING_AMOUNT * coin_storage[&pair_strings[0]].bestBid,
     };
     // Transaction 2
     coin_amount = match &order[1] {
-        ArbOrd::Buy(_pair1, _pair2) => coin_amount / coin_storage[&pair_strings[1]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => coin_amount * coin_storage[&pair_strings[1]].bestBid,
+        ArbOrd::Buy(_, _) => coin_amount / coin_storage[&pair_strings[1]].bestAsk,
+        ArbOrd::Sell(_, _) => coin_amount * coin_storage[&pair_strings[1]].bestBid,
     };
     // Transaction 3
     coin_amount = match &order[2] {
-        ArbOrd::Buy(_pair1, _pair2) => coin_amount / coin_storage[&pair_strings[2]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => coin_amount * coin_storage[&pair_strings[2]].bestBid,
+        ArbOrd::Buy(_, _) => coin_amount / coin_storage[&pair_strings[2]].bestAsk,
+        ArbOrd::Sell(_, _) => coin_amount * coin_storage[&pair_strings[2]].bestBid,
     };
     coin_amount
 }
@@ -442,7 +457,10 @@ fn find_triangular_arbitrage(
                             }),
                         }
                     }
-                    // println!("{}", profit);
+                    println!(
+                        "\n\nProfit: {}\nPairs: {:?}\nOrders: {:?}",
+                        profit, pairs, orders
+                    );
                     validator_writer.send(orders).unwrap();
                 }
             }
