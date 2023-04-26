@@ -368,23 +368,22 @@ fn calculate_profitablity(
     order: &[ArbOrd],
     coin_storage: &HashMap<String, Kucoin_websocket_responseL1>,
 ) -> f64 {
-    //profit, price, size
-    // TODO: make stable coins dynamic incase I add more
+    // TODO: make stable coins dynamic incase as I add more
     // transaction 1
-    let mut coin_amount;
+    let mut coin_amount: f64;
     coin_amount = match &order[0] {
         ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid,
+        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT * coin_storage[&pair_strings[0]].bestBid,
     };
     // Transaction 2
     coin_amount = match &order[1] {
-        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid,
+        ArbOrd::Buy(_pair1, _pair2) => coin_amount / coin_storage[&pair_strings[1]].bestAsk,
+        ArbOrd::Sell(_pair1, _pair2) => coin_amount * coin_storage[&pair_strings[1]].bestBid,
     };
     // Transaction 3
     coin_amount = match &order[2] {
-        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk,
-        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid,
+        ArbOrd::Buy(_pair1, _pair2) => coin_amount / coin_storage[&pair_strings[2]].bestAsk,
+        ArbOrd::Sell(_pair1, _pair2) => coin_amount * coin_storage[&pair_strings[2]].bestBid,
     };
     coin_amount
 }
@@ -443,6 +442,7 @@ fn find_triangular_arbitrage(
                             }),
                         }
                     }
+                    // println!("{}", profit);
                     validator_writer.send(orders).unwrap();
                 }
             }
