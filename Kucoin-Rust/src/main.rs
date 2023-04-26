@@ -438,9 +438,10 @@ fn find_triangular_arbitrage(
                 let orders_order = find_order_order(pairs_split.to_vec());
                 let profit = calculate_profitablity(pairs.clone(), &orders_order, &coin_storage)
                     - STARING_AMOUNT;
-                if profit >= 0.01 {
+                if profit >= MINIMUN_PROFIT {
                     let mut orders = vec![];
                     for side in orders_order {
+                        // TODO: Need to implement Rounding with math.round(#, #'s place)
                         match side {
                             ArbOrd::Buy(ref p1, ref p2) => orders.push(Order_struct {
                                 side: side.clone(),
@@ -457,10 +458,6 @@ fn find_triangular_arbitrage(
                             }),
                         }
                     }
-                    println!(
-                        "\n\nProfit: {}\nPairs: {:?}\nOrders: {:?}",
-                        profit, pairs, orders
-                    );
                     validator_writer.send(orders).unwrap();
                 }
             }
@@ -472,7 +469,7 @@ fn find_triangular_arbitrage(
 
 fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
     for msg in validator_reader {
-        // println!("READ FROM VALIDATOR: {:?}", msg)
+        println!("READ FROM VALIDATOR: {:?}", msg)
     }
 }
 
