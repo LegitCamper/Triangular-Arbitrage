@@ -62,17 +62,23 @@ enum KucoinRequestType {
     WebsocketToken,
 }
 
+#[allow(non_snake_case)]
 #[derive(Serialize, Debug)]
 struct KucoinRequestOrderPost {
-    order_type: String,
-    order_amount: f64,
-    order_price: f64,
-    order_symbol: String,
-    order_side: String,
-    client_id: u32,
+    timeInForce: String,
+    size: f64,
+    price: f64,
+    symbol: String,
+    side: String,
+    clientOid: u32,
 }
 
-async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType) -> Option<String> {
+async fn kucoin_request(
+    client: reqwest::Client,
+    endpoint: &str,
+    json: String,
+    method: KucoinRequestType,
+) -> Option<String> {
     let creds_file_path = "KucoinKeys.json".to_string();
     let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
     let api_creds: KucoinCreds = serde_json::from_reader(BufReader::new(creds_file))
@@ -96,9 +102,6 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
     let url: Url = base_url
         .join(endpoint)
         .expect("Was unable to join the endpoint and base_url");
-
-    // makes http client
-    let client = reqwest::Client::new();
 
     match method {
         KucoinRequestType::Post => {
@@ -141,7 +144,7 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
             Some(res)
         }
         KucoinRequestType::OrderPost => {
-            client
+            let res = client
                 .post(url)
                 .header("KC-API-KEY", api_creds.api_key)
                 .header("KC-API-SIGN", b64_encoded_sig)
@@ -151,8 +154,11 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
                 .json(&json)
                 .send()
                 .await
-                .expect("failed to post reqwest");
-            None
+                .expect("failed to post reqwest")
+                .text()
+                .await
+                .expect("failed to get payload");
+            Some(res)
         }
     }
 }
@@ -215,6 +221,7 @@ struct EmptyKucoinJson {
 
 async fn get_tradable_coin_pairs() -> Option<Vec<String>> {
     let kucoin_response = kucoin_request(
+        reqwest::Client::new(), // makes http client
         "/api/v1/market/allTickers",
         "Nothing to see here!".to_string(),
         KucoinRequestType::Get,
@@ -329,7 +336,7 @@ async fn create_valid_pairs_catalog() -> Vec<([String; 3], [String; 6])> {
 
 #[derive(Debug, Clone)]
 enum ArbOrd {
-    Buy(String, String), // pair1, pair2, price, size
+    Buy(String, String), // pair1, pair2
     Sell(String, String),
 }
 
@@ -467,9 +474,48 @@ fn find_triangular_arbitrage(
 
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
-fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
+#[derive(Debug, Serialize)]
+struct order_response {
+    orderId: f64,
+}
+
+async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
+    let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
+    let client = reqwest::Client::new(); // makes http client
+
     for msg in validator_reader {
-        println!("READ FROM VALIDATOR: {:?}", msg)
+        //  TODO: Implement rate limiting for items in channel while working
+        // println!("READ FROM VALIDATOR: {:?}", msg);
+
+        // Iterates through each order in msg
+        for order in msg {
+            let json_order = match order.side {
+                ArbOrd::Buy(pair1, pair2) => KucoinRequestOrderPost {
+                    timeInForce: "FOK".to_string(),
+                    size: order.size,
+                    price: order.price,
+                    symbol: format!("{}-{}", pair1, pair1),
+                    side: "buy".to_string(),
+                    clientOid: rng.gen(),
+                },
+                ArbOrd::Sell(pair1, pair2) => KucoinRequestOrderPost {
+                    timeInForce: "FOK".to_string(),
+                    size: order.size,
+                    price: order.price,
+                    symbol: format!("{}-{}", pair1, pair1),
+                    side: "sell".to_string(),
+                    clientOid: rng.gen(),
+                },
+            };
+            let kucoin_response = kucoin_request(
+                client.clone(),
+                "/api/v1/orders",
+                serde_json::to_string(&json_order).expect("Failed to Serialize"),
+                KucoinRequestType::OrderPost,
+            )
+            .await;
+            println!("{:?}", kucoin_response);
+        }
     }
 }
 
@@ -555,9 +601,10 @@ async fn kucoin_websocket(
     };
     // retreive temporary api token
     let websocket_info: websocket_detailsL1 = match kucoin_request(
+        reqwest::Client::new(), // makes http client
         "/api/v1/bullet-public",
         serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
-        KucoinRequestType::Post,
+        KucoinRequestType::WebsocketToken,
     )
     .await
     {
@@ -681,5 +728,5 @@ async fn main() {
     // pauses while threads are running
     websocket_thread.join().unwrap().await;
     validator_thread.join().unwrap();
-    ordering_thread.join().unwrap();
+    ordering_thread.join().unwrap().await;
 }
