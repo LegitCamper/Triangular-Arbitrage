@@ -319,6 +319,7 @@ async fn create_valid_pairs_catalog() -> Vec<([String; 3], [String; 6])> {
     for received in rx {
         output_list.push(received);
     }
+    validator.unwrap().join().unwrap();
     output_list
 }
 
@@ -370,6 +371,7 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
             coin_pair[5].to_owned(),
         ));
     }
+    println!("{:?}\n{:?}", coin_pair, order);
     order
 }
 
@@ -377,29 +379,31 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
 fn calculate_profitablity(
     //This also returns price and size
     pair_strings: [String; 3],
-    order: &Vec<ArbOrd>,
+    order: &[ArbOrd],
     coin_storage: &HashMap<String, Kucoin_websocket_responseL1>,
 ) -> f64 {
     //profit, price, size
     // TODO: make stable coins dynamic incase I add more
     // transaction 1
-    let mut coin_amount = match &order[0] {
-        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
-        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid,
+    let mut coin_amount;
+    coin_amount = match &order[0] {
+        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestAsk,
+        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[0]].bestBid,
     };
     // Transaction 2
     coin_amount = match &order[1] {
-        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk,
-        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid,
+        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestAsk,
+        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[1]].bestBid,
     };
     // Transaction 3
     coin_amount = match &order[2] {
-        ArbOrd::Buy(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk,
-        ArbOrd::Sell(pair1, pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid,
+        ArbOrd::Buy(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestAsk,
+        ArbOrd::Sell(_pair1, _pair2) => STARING_AMOUNT / coin_storage[&pair_strings[2]].bestBid,
     };
     coin_amount
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Order_struct {
     side: ArbOrd,
@@ -453,8 +457,7 @@ fn find_triangular_arbitrage(
                             }),
                         }
                     }
-                    validator_writer.send(orders);
-                    // println!("profit: {profit}");
+                    validator_writer.send(orders).unwrap();
                 }
             }
         }
@@ -464,9 +467,9 @@ fn find_triangular_arbitrage(
 /////////////////////////////////////////////////////////  execute_trades  /////////////////////////////////////////////////////////
 
 fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
-    // loop {
-    println!("READ FROM VALIDATOR: {:?}", validator_reader)
-    // }
+    for msg in validator_reader {
+        // println!("READ FROM VALIDATOR: {:?}", msg)
+    }
 }
 
 /////////////////////////////////////////////////////////  Webscocket  /////////////////////////////////////////////////////////
@@ -509,14 +512,9 @@ struct kucoin_webscoket_ping {
     r#type: String,
 }
 
-// websocket responses
-enum Websocket_Signal {
-    Greet,
-    Ping,
-}
-
 // Kucoin websocket return - Serde
 #[allow(non_snake_case)]
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct Kucoin_websocket_response {
     r#type: String,
@@ -525,6 +523,7 @@ struct Kucoin_websocket_response {
     data: Kucoin_websocket_responseL1,
 }
 #[derive(Clone)]
+#[allow(dead_code)]
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
 struct Kucoin_websocket_responseL1 {
@@ -591,7 +590,7 @@ async fn kucoin_websocket(
 
     // Webscoket stuff
     let ws = workflow_websocket::client::WebSocket::new(
-        &websocket_url.to_string(),
+        websocket_url.as_ref(), // .to_string(),
         workflow_websocket::client::Options::default(),
     );
     ws.as_ref()
@@ -620,7 +619,7 @@ async fn kucoin_websocket(
     });
 
     // Recive messages (Symbol data)
-    let ws_read = ws.expect("Could not clone ws for reader").clone();
+    let ws_read = ws.expect("Could not clone ws for reader"); //.clone();
     workflow_core::task::spawn(async move {
         loop {
             let response = ws_read.recv();
@@ -629,7 +628,6 @@ async fn kucoin_websocket(
                     // println!("{}", x);
                     let response: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
-                    println!("{:?}", response); // TODO: remove this
                     channel_writer.send(response).unwrap()
                 } else {
                     println!("Webosocket Response: {}", x)
@@ -644,22 +642,22 @@ async fn kucoin_websocket(
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
-#[derive(Debug, Deserialize)]
-struct CoinFees {
-    class_a: CoinFeesL1,
-    class_b: CoinFeesL1,
-    class_c: CoinFeesL1,
-}
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-struct CoinFeesL1 {
-    regular_maker: f64,
-    regular_taker: f64,
-    KCS_maker: f64,
-    KCS_taker: f64,
-    coins: Vec<String>,
-}
+// #[derive(Debug, Deserialize)]
+// struct CoinFees {
+//     class_a: CoinFeesL1,
+//     class_b: CoinFeesL1,
+//     class_c: CoinFeesL1,
+// }
+// #[derive(Debug, Deserialize)]
+// #[allow(non_snake_case)]
+// #[allow(dead_code)]
+// struct CoinFeesL1 {
+//     regular_maker: f64,
+//     regular_taker: f64,
+//     KCS_maker: f64,
+//     KCS_taker: f64,
+//     coins: Vec<String>,
+// }
 
 #[tokio::main]
 async fn main() {
