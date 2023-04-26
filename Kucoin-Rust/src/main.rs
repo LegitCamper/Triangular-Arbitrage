@@ -3,13 +3,11 @@
 use core::future::poll_fn;
 // use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+
 use std::{
     collections::HashMap,
-    env,
-    fs::{read_to_string, remove_file, File},
-    io::{BufRead, BufReader, BufWriter},
-    path::Path,
+    fs::File,
+    io::{BufRead, BufReader},
     sync::mpsc,
     //os::unix::thread::JoinHandleExt,
     //marker::Tuple,
@@ -490,11 +488,11 @@ async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
         // Iterates through each order in msg
         for order in msg {
             let json_order = match order.side {
-                ArbOrd::Buy(pair1, pair2) => KucoinRequestOrderPost {
+                ArbOrd::Buy(pair1, _pair2) => KucoinRequestOrderPost {
                     timeInForce: "FOK".to_string(),
                     size: order.size,
                     price: order.price,
-                    symbol: format!("{}-{}", pair1, pair1),
+                    symbol: format!("{}-{}", pair1, pair2),
                     side: "buy".to_string(),
                     clientOid: rng.gen(),
                 },
@@ -502,7 +500,7 @@ async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
                     timeInForce: "FOK".to_string(),
                     size: order.size,
                     price: order.price,
-                    symbol: format!("{}-{}", pair1, pair1),
+                    symbol: format!("{}-{}", pair1, pair2),
                     side: "sell".to_string(),
                     clientOid: rng.gen(),
                 },
