@@ -3,7 +3,7 @@
 use core::future::poll_fn;
 // use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::{
     collections::HashMap,
     env,
@@ -84,33 +84,12 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
         .to_string();
 
     // signs kucoin_request_string
-    let signed_key = hmac::Key::new(hmac::HMAC_SHA256, &api_creds.api_secret.as_bytes());
+    let signed_key = hmac::Key::new(hmac::HMAC_SHA256, api_creds.api_secret.as_bytes());
     let payload = format!("{}+{}+{}+{}", &since_the_epoch, "POST", endpoint, json); // have it as static POST
                                                                                     // because it doest seem
                                                                                     // like the GET needs it
     let signature = hmac::sign(&signed_key, payload.as_bytes());
-    let _b64_encoded_sig: String = BASE64.encode(signature.as_ref());
-    //println!("b64_encoded_sig: {}", b64_encoded_sig);
-
-    // adding all the reqiured headers
-    let headers = reqwest::header::HeaderMap::new();
-    // headers.insert(HeaderName::from_static("KC-API-KEY"), HeaderValue::from_static(&api_creds.api_key.as_str()));
-    // headers.insert(
-    //     reqwest::header::HeaderName::from_static("KC-API-SIGN"),
-    //     reqwest::header::HeaderValue::from_static(&'a b64_encoded_sig),
-    // );
-    // headers.insert(
-    //     reqwest::header::HeaderName::from_static("KC-API-TIMESTAMP"),
-    //     reqwest::header::HeaderValue::from_static(&since_the_epoch),
-    // );
-    // headers.insert(
-    //     reqwest::header::HeaderName::from_static("API-KEY-PASSPHRASE"),
-    //     reqwest::header::HeaderValue::from_static(&api_creds.api_passphrase),
-    // );
-    // headers.insert(
-    //     reqwest::header::HeaderName::from_static("KC-API-KEY-VERSION"),
-    //     reqwest::header::HeaderValue::from_static(&api_creds.api_key_version),
-    // );
+    let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
 
     let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
     let url: Url = base_url
@@ -135,7 +114,6 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
         KucoinRequestType::Get => {
             let res = client
                 .get(url)
-                .headers(headers)
                 .json(&json)
                 .send()
                 .await
@@ -148,6 +126,11 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
         KucoinRequestType::WebsocketToken => {
             let res = client
                 .post(url)
+                .header("KC-API-KEY", api_creds.api_key)
+                .header("KC-API-SIGN", b64_encoded_sig)
+                .header("KC-API-TIMESTAMP", since_the_epoch)
+                .header("API-PASSPHRASE", api_creds.api_passphrase)
+                .header("KC-API-VERSION", api_creds.api_key_version)
                 .send()
                 .await
                 .expect("failed to post reqwest")
@@ -159,7 +142,11 @@ async fn kucoin_request(endpoint: &str, json: String, method: KucoinRequestType)
         KucoinRequestType::OrderPost => {
             client
                 .post(url)
-                .headers(headers)
+                .header("KC-API-KEY", api_creds.api_key)
+                .header("KC-API-SIGN", b64_encoded_sig)
+                .header("KC-API-TIMESTAMP", since_the_epoch)
+                .header("API-PASSPHRASE", api_creds.api_passphrase)
+                .header("KC-API-VERSION", api_creds.api_key_version)
                 .json(&json)
                 .send()
                 .await
@@ -341,7 +328,7 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
             coin_pair[0].to_owned(),
             coin_pair[1].to_owned(),
         ));
-    } else if coin_pair[1] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
+    } else if coin_pair[1] == coin_pair[2] || coin_pair[1] == coin_pair[3] {
         order.push(ArbOrd::Sell(
             coin_pair[0].to_owned(),
             coin_pair[1].to_owned(),
@@ -371,7 +358,6 @@ fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
             coin_pair[5].to_owned(),
         ));
     }
-    println!("{:?}\n{:?}", coin_pair, order);
     order
 }
 
@@ -614,7 +600,13 @@ async fn kucoin_websocket(
                 .send(workflow_websocket::client::Message::Text(ping.to_string()))
                 .await
                 .expect("Failed to send ping to websocket");
-            workflow_core::task::sleep(std::time::Duration::from_secs(10)).await;
+            workflow_core::task::sleep(std::time::Duration::from_millis(
+                websocket_info.data.instanceServers[0]
+                    .pingInterval
+                    .try_into()
+                    .unwrap(),
+            ))
+            .await;
         }
     });
 
@@ -625,7 +617,6 @@ async fn kucoin_websocket(
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
                 if x.contains("message") {
-                    // println!("{}", x);
                     let response: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(response).unwrap()
@@ -642,31 +633,8 @@ async fn kucoin_websocket(
 
 /////////////////////////////////////////////////////////  Main  /////////////////////////////////////////////////////////
 
-// #[derive(Debug, Deserialize)]
-// struct CoinFees {
-//     class_a: CoinFeesL1,
-//     class_b: CoinFeesL1,
-//     class_c: CoinFeesL1,
-// }
-// #[derive(Debug, Deserialize)]
-// #[allow(non_snake_case)]
-// #[allow(dead_code)]
-// struct CoinFeesL1 {
-//     regular_maker: f64,
-//     regular_taker: f64,
-//     KCS_maker: f64,
-//     KCS_taker: f64,
-//     coins: Vec<String>,
-// }
-
 #[tokio::main]
 async fn main() {
-    // Dont need coin_fees because I assume they pay fees with KCS
-    // let coin_fees_path = cwd_plus_path("/coinfees.json".to_string());
-    // let coin_fees_string = read_to_string(coin_fees_path).expect("Unable to read file");
-    // let coin_fees: CoinFees =
-    // serde_json::from_str(&coin_fees_string).expect("Failed to Desearlize coin_fees");
-
     // Gets valid pair combinations
     let pair_combinations = create_valid_pairs_catalog().await; // creates json with all the coins
     println!("Generated Valid Coin Pairs successfully");
