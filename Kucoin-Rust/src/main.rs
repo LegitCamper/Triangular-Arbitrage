@@ -479,7 +479,7 @@ struct order_response {
 
 async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
-    let client = reqwest::Client::new(); // makes http client
+    let client = reqwest::Client::new(); // makes http client - saves sessions for faster request
 
     for msg in validator_reader {
         //  TODO: Implement rate limiting for items in channel while working
@@ -512,7 +512,7 @@ async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
                 KucoinRequestType::OrderPost,
             )
             .await;
-            println!("{:?}", kucoin_response);
+            // println!("{:?}", kucoin_response)
         }
     }
 }
@@ -681,7 +681,7 @@ async fn kucoin_websocket(
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(response).unwrap()
                 } else {
-                    println!("Webosocket Response: {}", x)
+                    println!("Webosocket Response: {}", x);
                 }
             }
         }
@@ -706,6 +706,8 @@ async fn main() {
             kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
         })
         .unwrap();
+    websocket_thread.join().unwrap().await;
+
     let (validator_writer, validator_reader) = mpsc::channel::<Vec<Order_struct>>(); // initates the channel
     let validator_thread = thread::Builder::new()
         .name("Validator Thread".to_string())
@@ -718,13 +720,11 @@ async fn main() {
             );
         })
         .unwrap();
+    validator_thread.join().unwrap();
+
     let ordering_thread = thread::Builder::new()
         .name("Ordering Thread".to_string())
         .spawn(move || execute_trades(validator_reader))
         .unwrap();
-
-    // pauses while threads are running
-    websocket_thread.join().unwrap().await;
-    validator_thread.join().unwrap();
     ordering_thread.join().unwrap().await;
 }
