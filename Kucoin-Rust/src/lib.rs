@@ -34,6 +34,10 @@ use data_encoding::BASE64;
 // node::{self, NodeEvent},
 // };
 use ring::hmac;
+
+// use hmac::{Hmac, Mac};
+// use sha2::Sha256;
+
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_this_or_that::as_f64;
@@ -95,11 +99,16 @@ async fn kucoin_request(
     let payload = format!("{}+{}+{}+{}", &since_the_epoch, "POST", endpoint, json); // have it as static POST
                                                                                     // because it doest seem
                                                                                     // like the GET needs it
-    let signature = hmac::sign(&signed_key, payload.as_bytes());
-    let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
+                                                                                    // let signature = hmac::sign(&signed_key, payload.as_bytes());
+                                                                                    // let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
 
     let hmac_passphrase = hmac::sign(&signed_key, api_creds.api_passphrase.as_bytes());
-    println!("{:?}", std::str::from_utf8(hmac_passphrase.as_ref()));
+    // println!("{}", std::str::from_utf8(hmac_passphrase.as_ref()).unwrap());
+
+    // let mut mac = HmacSha256::new_varkey(api_creds.api_secret).unwrap();
+    // mac.input(message);
+    // let result = mac.result().code();
+    // let r2 = hex::encode(&result);
 
     let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
     let url: Url = base_url
