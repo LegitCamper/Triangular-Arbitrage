@@ -8,24 +8,26 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader},
-    sync::mpsc,
+    // sync::mpsc,
     //os::unix::thread::JoinHandleExt,
     //marker::Tuple,
     //fmt::Write,
     //ffi::CString
-    thread,
+    // thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use tokio::sync::mpsc;
+
 //use futures_util::{future, pin_mut, StreamExt};
-use futures::StreamExt; // 0.3.13
-                        // use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-                        // use tungstenite::{connect, Message};
-use workflow_core;
-use workflow_websocket;
+// use futures::StreamExt; // 0.3.13
+// use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+// use tungstenite::{connect, Message};
+// use workflow_core;
+// use workflow_websocket;
 //extern crate libc;
 use data_encoding::BASE64;
-use itertools::Itertools;
+// use itertools::Itertools;
 // use message_io::{
 // network::{NetEvent, Transport},
 // webscoket library
@@ -96,6 +98,9 @@ async fn kucoin_request(
     let signature = hmac::sign(&signed_key, payload.as_bytes());
     let b64_encoded_sig: String = BASE64.encode(signature.as_ref());
 
+    let hmac_passphrase = hmac::sign(&signed_key, api_creds.api_passphrase.as_bytes());
+    println!("{:?}", std::str::from_utf8(hmac_passphrase.as_ref()));
+
     let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
     let url: Url = base_url
         .join(endpoint)
@@ -128,11 +133,11 @@ async fn kucoin_request(
         KucoinRequestType::WebsocketToken => {
             let res = client
                 .post(url)
-                .header("KC-API-KEY", api_creds.api_key)
-                .header("KC-API-SIGN", b64_encoded_sig)
-                .header("KC-API-TIMESTAMP", since_the_epoch)
-                .header("API-PASSPHRASE", api_creds.api_passphrase)
-                .header("KC-API-VERSION", api_creds.api_key_version)
+                // .header("KC-API-KEY", api_creds.api_key)
+                // .header("KC-API-SIGN", b64_encoded_sig)
+                // .header("KC-API-TIMESTAMP", since_the_epoch)
+                // .header("API-PASSPHRASE", hmac_passphrase)
+                // .header("KC-API-VERSION", api_creds.api_key_version)
                 .send()
                 .await
                 .expect("failed to post reqwest")
@@ -142,12 +147,16 @@ async fn kucoin_request(
             Some(res)
         }
         KucoinRequestType::OrderPost => {
+            println!(
+                "{}, {}, {:?} {}",
+                api_creds.api_key, b64_encoded_sig, hmac_passphrase, since_the_epoch
+            );
             let res = client
                 .post(url)
                 .header("KC-API-KEY", api_creds.api_key)
                 .header("KC-API-SIGN", b64_encoded_sig)
                 .header("KC-API-TIMESTAMP", since_the_epoch)
-                .header("API-PASSPHRASE", api_creds.api_passphrase)
+                // .header("API-PASSPHRASE", hmac_passphrase)
                 .header("KC-API-VERSION", api_creds.api_key_version)
                 .json(&json)
                 .send()
@@ -250,83 +259,73 @@ pub async fn create_valid_pairs_catalog() -> Vec<([String; 3], [String; 6])> {
         Some(x) => x,
         None => panic!("Failed connect to Kucoin and retrive list of coins"),
     };
-    let (tx, rx) = mpsc::channel(); // makes channel to pass pairs through
 
-    let validator = thread::Builder::new()
-        .name("Coin Pair Combinations Validator".to_string())
-        .spawn(move || {
-            for pair1 in coin_pairs.iter() {
-                if !pair1.contains(STABLE_COINS[0]) {
-                    // TODO: make dynamic incase I deal with more stable coins
+    let mut output_list: Vec<([String; 3], [String; 6])> = Vec::new();
+
+    for pair1 in coin_pairs.iter() {
+        if !pair1.contains(STABLE_COINS[0]) {
+            // TODO: make dynamic incase I deal with more stable coins
+            continue;
+        };
+        let pair1_split: [&str; 2] = pair1.split('-').collect::<Vec<&str>>().try_into().unwrap();
+        for pair2 in coin_pairs.iter() {
+            if pair2 == pair1 || pair2.contains(STABLE_COINS[0]) {
+                continue;
+            };
+            let pair2_split: [&str; 2] =
+                pair2.split('-').collect::<Vec<&str>>().try_into().unwrap();
+            if pair2_split[0] != pair1_split[0]
+                && pair2_split[0] != pair1_split[1]
+                && pair2_split[1] != pair1_split[0]
+                && pair2_split[1] != pair1_split[1]
+            {
+                continue;
+            };
+            for pair3 in coin_pairs.iter() {
+                if pair3 == pair2 || pair3 == pair1 || !pair3.contains(STABLE_COINS[0]) {
                     continue;
-                };
-                let pair1_split: [&str; 2] =
-                    pair1.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                for pair2 in coin_pairs.iter() {
-                    if pair2 == pair1 || pair2.contains(STABLE_COINS[0]) {
-                        continue;
-                    };
-                    let pair2_split: [&str; 2] =
-                        pair2.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                    if pair2_split[0] != pair1_split[0]
-                        && pair2_split[0] != pair1_split[1]
-                        && pair2_split[1] != pair1_split[0]
-                        && pair2_split[1] != pair1_split[1]
-                    {
-                        continue;
-                    };
-                    for pair3 in coin_pairs.iter() {
-                        if pair3 == pair2 || pair3 == pair1 || !pair3.contains(STABLE_COINS[0]) {
-                            continue;
-                        }
-                        let pair3_split: [&str; 2] =
-                            pair3.split('-').collect::<Vec<&str>>().try_into().unwrap();
-                        if pair3_split[0] != pair2_split[0]
-                            && pair3_split[0] != pair2_split[1]
-                            && pair3_split[1] != pair2_split[0]
-                            && pair3_split[1] != pair2_split[1]
-                        {
-                            continue;
-                        }
+                }
+                let pair3_split: [&str; 2] =
+                    pair3.split('-').collect::<Vec<&str>>().try_into().unwrap();
+                if pair3_split[0] != pair2_split[0]
+                    && pair3_split[0] != pair2_split[1]
+                    && pair3_split[1] != pair2_split[0]
+                    && pair3_split[1] != pair2_split[1]
+                {
+                    continue;
+                }
 
-                        let valid_pair = (
-                            [pair1.to_owned(), pair2.to_owned(), pair3.to_owned()],
-                            [
-                                pair1_split[0].to_string(),
-                                pair1_split[1].to_string(),
-                                pair2_split[0].to_string(),
-                                pair2_split[1].to_string(),
-                                pair3_split[0].to_string(),
-                                pair3_split[1].to_string(),
-                            ],
-                        );
+                let valid_pair = (
+                    [pair1.to_owned(), pair2.to_owned(), pair3.to_owned()],
+                    [
+                        pair1_split[0].to_string(),
+                        pair1_split[1].to_string(),
+                        pair2_split[0].to_string(),
+                        pair2_split[1].to_string(),
+                        pair3_split[0].to_string(),
+                        pair3_split[1].to_string(),
+                    ],
+                );
 
-                        // adding check to ensure there are only two of every symbol - Last check
-                        let mut equal_symbols = true;
-                        let mut pair_count = HashMap::new();
-                        for pair in valid_pair.1.iter() {
-                            let count = pair_count.entry(pair).or_insert(0);
-                            *count += 1;
-                        }
-                        for value in pair_count.values() {
-                            if value != &2 {
-                                equal_symbols = false;
-                            }
-                        }
-
-                        if equal_symbols {
-                            tx.send(valid_pair).unwrap();
-                        }
+                // adding check to ensure there are only two of every symbol - Last check
+                let mut equal_symbols = true;
+                let mut pair_count = HashMap::new();
+                for pair in valid_pair.1.iter() {
+                    let count = pair_count.entry(pair).or_insert(0);
+                    *count += 1;
+                }
+                for value in pair_count.values() {
+                    if value != &2 {
+                        equal_symbols = false;
                     }
                 }
+
+                if equal_symbols {
+                    output_list.push(valid_pair);
+                }
             }
-        });
-    // waits for thread to finish before sending valid pairs
-    let mut output_list: Vec<([String; 3], [String; 6])> = Vec::new();
-    for received in rx {
-        output_list.push(received);
+        }
     }
-    validator.unwrap().join().unwrap();
     output_list
 }
 
@@ -416,10 +415,10 @@ pub struct Order_struct {
     size: f64,
 }
 
-pub fn find_triangular_arbitrage(
+pub async fn find_triangular_arbitrage(
     valid_coin_pairs: &Vec<([String; 3], [String; 6])>,
     // coin_fees: CoinFees,
-    websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
+    mut websocket_reader: mpsc::Receiver<Kucoin_websocket_response>,
     validator_writer: mpsc::Sender<Vec<Order_struct>>,
 ) {
     // skipping caluculation for fees - assuming KCS fees are enabled
@@ -427,7 +426,7 @@ pub fn find_triangular_arbitrage(
 
     // Define methode for storing current best prices
     let mut coin_storage: HashMap<String, Kucoin_websocket_responseL1> = HashMap::new();
-    while let Ok(msg) = websocket_reader.recv() {
+    while let Some(msg) = websocket_reader.recv().await {
         coin_storage.insert(msg.subject, msg.data);
         // main validator loop
         for pairs_tuple in valid_coin_pairs {
@@ -463,7 +462,7 @@ pub fn find_triangular_arbitrage(
                             }),
                         }
                     }
-                    validator_writer.send(orders).unwrap();
+                    validator_writer.send(orders).await.unwrap();
                 }
             }
         }
@@ -474,16 +473,16 @@ pub fn find_triangular_arbitrage(
 
 #[derive(Debug, Serialize)]
 struct order_response {
-    orderId: f64,
+    order_id: f64,
 }
 
-pub async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
+pub async fn execute_trades(mut validator_reader: mpsc::Receiver<Vec<Order_struct>>) {
     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
     let client = reqwest::Client::new(); // makes http client - saves sessions for faster request
 
-    for msg in validator_reader {
+    while let Some(msg) = validator_reader.recv().await {
         //  TODO: Implement rate limiting for items in channel while working
-        // println!("READ FROM VALIDATOR: {:?}", msg);
+        //     - this hould be working now that I have the mpsc buffer set to 1
 
         // Iterates through each order in msg
         for order in msg {
@@ -512,7 +511,9 @@ pub async fn execute_trades(validator_reader: mpsc::Receiver<Vec<Order_struct>>)
                 KucoinRequestType::OrderPost,
             )
             .await;
-            // println!("{:?}", kucoin_response)
+            println!("Order Response: {:?}", kucoin_response); // TODO: Remove this
+
+            // println!("{:?}", json_order) // TODO: Remove This
         }
     }
 }
@@ -677,12 +678,12 @@ pub async fn kucoin_websocket(
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
                 if x.contains("message") {
-                    let response: Kucoin_websocket_response =
+                    let res: Kucoin_websocket_response =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
-                    channel_writer.send(response).unwrap()
+                    channel_writer.send(res).await.expect("Failed to send");
                 } else {
                     println!("Webosocket Response: {}", x);
-                }
+                };
             }
         }
     });

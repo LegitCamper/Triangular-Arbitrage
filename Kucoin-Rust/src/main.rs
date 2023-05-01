@@ -1,5 +1,5 @@
 // Libraries
-use std::{sync::mpsc, thread};
+use tokio::{runtime::Builder, sync::mpsc}; //, task};
 
 // my Libraries
 use kucoin_arbitrage::{
@@ -12,32 +12,34 @@ async fn main() {
     let pair_combinations = create_valid_pairs_catalog().await; // creates json with all the coins
     println!("Generated Valid Coin Pairs successfully");
 
-    let (websocket_writer, websocket_reader) = mpsc::channel(); // mpsc channel for websocket and validator
-    let websocket_thread = thread::Builder::new()
-        .name("Websocket Thread".to_string())
-        .spawn(move || {
-            kucoin_websocket(websocket_writer) //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
-        })
+    // build runtime - ensure tasks are being allocated their own thread
+    let runtime = Builder::new_multi_thread()
+        // .worker_threads(4)
+        .enable_all()
+        .thread_name("arbitrage-caluclator")
+        .build()
         .unwrap();
-    websocket_thread.join().unwrap().await;
 
-    let (validator_writer, validator_reader) = mpsc::channel(); // initates the channel
-    let validator_thread = thread::Builder::new()
-        .name("Validator Thread".to_string())
-        .spawn(move || {
-            find_triangular_arbitrage(
-                &pair_combinations,
-                // coin_fees,
-                websocket_reader,
-                validator_writer,
-            );
-        })
-        .unwrap();
-    validator_thread.join().unwrap();
+    let (websocket_writer, websocket_reader) = mpsc::channel(100); // mpsc channel for websocket and validator
+    let websocket_task = runtime.spawn(async move {
+        kucoin_websocket(websocket_writer).await //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
+    });
 
-    let ordering_thread = thread::Builder::new()
-        .name("Ordering Thread".to_string())
-        .spawn(move || execute_trades(validator_reader))
-        .unwrap();
-    ordering_thread.join().unwrap().await;
+    let (validator_writer, validator_reader) = mpsc::channel(1); // initates the channel
+    let validator_task = runtime.spawn(async move {
+        find_triangular_arbitrage(
+            &pair_combinations,
+            // coin_fees,
+            websocket_reader,
+            validator_writer,
+        )
+        .await;
+    });
+
+    let ordering_task = runtime.spawn(async move { execute_trades(validator_reader).await });
+
+    // await tasks
+    websocket_task.await.unwrap();
+    validator_task.await.unwrap();
+    ordering_task.await.unwrap();
 }
