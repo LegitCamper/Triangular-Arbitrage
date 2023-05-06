@@ -1,7 +1,9 @@
 use data_encoding::BASE64;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::Client;
 use ring::hmac;
 use serde::{Deserialize, Serialize};
-use serde_this_or_that::as_f64;
+use serde_this_or_that::{as_f64, as_u64};
 use std::{
     fs::File,
     io::BufReader,
@@ -10,14 +12,7 @@ use std::{
 use url::Url;
 
 #[derive(Debug)]
-pub struct KucoinInterface(pub KucoinCreds);
-
-// #[derive(Debug)]
-// pub enum KucoinInterfaceTask {
-//     Order,
-//     WebsocketToken,
-//     Pairs,
-// }
+pub struct KucoinInterface(pub KucoinCreds, Client);
 
 #[derive(Debug, Deserialize)]
 pub struct KucoinCreds {
@@ -47,28 +42,34 @@ struct KucoinRequestOrderPost {
     clientOid: u32,
 }
 
-// make these three prettier with recursive structs or sum
 #[allow(non_snake_case)]
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "snake_case")]
-struct KucoinCoinsL0 {
-    data: KucoinCoinsL1,
+// status tier
+pub struct KucoinResponseL0 {
+    #[serde(deserialize_with = "as_u64")]
+    code: u64,
+    data: KucoinResponseL1,
 }
 
 #[allow(non_snake_case)]
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "snake_case")]
-struct KucoinCoinsL1 {
-    ticker: Vec<KucoinCoinsL2>,
+// data tier
+pub struct KucoinResponseL1 {
+    token: String, // Only returned with websocket token
+    instanceServers: Vec<KucoinResponseL2>,
+    ticker: Vec<KucoinResponseL2>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
+#[allow(dead_code)]
 #[serde(rename_all = "snake_case")]
-struct KucoinCoinsL2 {
+pub struct KucoinResponseL2 {
+    // for pair response
     symbol: String,
     symbolName: String,
     #[serde(deserialize_with = "as_f64")]
@@ -83,8 +84,8 @@ struct KucoinCoinsL2 {
     high: f64,
     #[serde(deserialize_with = "as_f64")]
     low: f64,
-    #[serde(deserialize_with = "as_f64")]
-    vol: f64,
+    #[serde(deserialize_with = "as_u64")]
+    vol: u64,
     #[serde(deserialize_with = "as_f64")]
     volValue: f64,
     #[serde(deserialize_with = "as_f64")]
@@ -99,33 +100,36 @@ struct KucoinCoinsL2 {
     takerCoefficient: f64,
     #[serde(deserialize_with = "as_f64")]
     makerCoefficient: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct EmptyKucoinJson {
-    string: String,
+    // for websocket tocker response
+    endpoint: String,
+    encrypt: bool,
+    #[serde(deserialize_with = "as_u64")]
+    pingInterval: u64,
+    #[serde(deserialize_with = "as_u64")]
+    pingTimeout: u64,
 }
 
 impl KucoinInterface {
-    pub fn new(self) -> Self {
-        Self(self.access_creds())
-    }
-    fn access_creds(self) -> KucoinCreds {
+    pub fn new() -> KucoinInterface {
+        // Gets api credentials
         let creds_file_path = "KucoinKeys.json".to_string();
         let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
         let api_creds: KucoinCreds = serde_json::from_reader(BufReader::new(creds_file))
             .expect("unable to parse KucoinKeys.json");
-        api_creds
+
+        // Makes new reqwest client so its all the same session
+        KucoinInterface(api_creds, Client::new())
     }
 
     pub async fn request(
         self,
-        client: reqwest::Client,
         endpoint: &str,
         json: String,
         method: KucoinRequestType,
-    ) -> Option<String> {
-        let api_creds = self.0;
+    ) -> Option<KucoinResponseL1> {
+        // alias values in self
+        let api_creds = &self.0;
+        let client = &self.1;
 
         let since_the_epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -152,11 +156,10 @@ impl KucoinInterface {
             .expect("Was unable to join the endpoint and base_url");
 
         // Make header type
-        // let mut headers = HeaderMap::new();
-        // // let api_key_str: &'static str = &api_creds.api_key;
+        let mut _headers = HeaderMap::new();
         // headers.insert(
         //     HeaderName::from_static("KC-API-KEY"),
-        //     HeaderValue::from_static(&api_creds.api_key),
+        //     HeaderValue::from_static(&self.0.api_key),
         // );
 
         match method {
@@ -169,7 +172,7 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(res)
+                Some(self.response(res))
             }
             KucoinRequestType::Get => {
                 let res = client
@@ -181,11 +184,11 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(res)
+                Some(self.response(res))
             }
             KucoinRequestType::WebsocketToken => {
                 let res = client
-                    .post(url)
+                    .post(url) // TODO: Should be private endpoint and use creds
                     // .header("KC-API-KEY", api_creds.api_key)
                     // .header("KC-API-SIGN", b64_encoded_sig)
                     // .header("KC-API-TIMESTAMP", since_the_epoch)
@@ -197,7 +200,7 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(res)
+                Some(self.response(res))
             }
             KucoinRequestType::OrderPost => {
                 println!(
@@ -223,36 +226,33 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(res)
+                Some(self.response(res))
             }
         }
     }
 
-    pub async fn get_pairs(self) -> Option<Vec<String>> {
-        let kucoin_response = self.request(
-            reqwest::Client::new(), // makes http client
-            "/api/v1/market/allTickers",
-            "Nothing to see here!".to_string(),
-            KucoinRequestType::Get,
-        );
-        match kucoin_response.await {
-            Some(kucoin_response) => {
-                let coin_pairs_struct: KucoinCoinsL0 =
-                    serde_json::from_str(kucoin_response.as_str())
-                        .expect("JSON was not well-formatted");
-                let coin_pairs = coin_pairs_struct.data.ticker;
-
-                // TODO: replace with a map and filter statment later
-                let mut new_coin_pairs: Vec<String> = Vec::new();
-
-                for i in coin_pairs.iter() {
-                    new_coin_pairs.push(i.symbol.clone());
-                }
-                Some(new_coin_pairs)
-            }
-            None => None,
+    fn response(self, response: String) -> KucoinResponseL1 {
+        // TODO: maybe parse the status code here and panic with better errors
+        println!("{}", response);
+        let l1: KucoinResponseL0 = serde_json::from_str(&response).expect("fuckj");
+        // println!("{:?}", l1);
+        if l1.code != 200000 {
+            panic!(
+                "Unable to read Kucoin Reponse\nSomething Probably Went Wrong\n{:?}",
+                l1
+            )
+        } else {
+            l1.data
         }
     }
+
+    // pub async fn get_pairs(self) -> Option<KucoinResponseL0> {
+    //     self.request(
+    //         "/api/v1/market/allTickers",
+    //         String::from(""),
+    //         KucoinRequestType::Get,
+    //     );
+    // }
 
     pub fn clone_keys(self) -> KucoinCreds {
         KucoinCreds {
