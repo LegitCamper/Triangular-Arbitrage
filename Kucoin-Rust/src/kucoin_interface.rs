@@ -10,7 +10,7 @@ use std::{
     io::BufReader,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tokio::sync::Mutex;
+
 use url::Url;
 
 #[derive(Debug)]
@@ -150,7 +150,7 @@ impl KucoinInterface {
         KucoinInterface(Arc::new(api_creds), Client::new())
     }
 
-    fn default() -> KucoinInterface {
+    pub fn default() -> KucoinInterface {
         // Gets api credentials
         let creds_file_path = "KucoinKeys.json".to_string();
         let creds_file = File::open(creds_file_path).expect("unable to read KucoinKeys.json");
@@ -161,35 +161,30 @@ impl KucoinInterface {
         KucoinInterface(Arc::new(api_creds), Client::new())
     }
 
-    pub async fn get_headers(
-        &self,
-        payload: String,
-        passphrase: String,
-        timestamp: String,
-    ) -> HeaderMap {
-        let api_creds = self.clone_keys().await;
+    pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
+        let api_creds = self.clone_keys();
         // Make header type
         let mut headers = HeaderMap::new();
         headers.insert(
             HeaderName::from_static("KC-API-KEY"),
-            HeaderValue::try_from(&api_creds.api_key).unwrap(),
+            HeaderValue::try_from(&api_creds.api_key).expect("fsdfasdfasdfasdfasdfasdf"),
         );
-        headers.insert(
-            HeaderName::from_static("KC-API-SIGN"),
-            HeaderValue::try_from(payload).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("KC-API-TIMESTAMP "),
-            HeaderValue::try_from(timestamp).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("KC-API-PASSPHRASE"),
-            HeaderValue::try_from(passphrase).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("KC-API-KEY-VERSION "),
-            HeaderValue::try_from(&api_creds.api_key_version).unwrap(),
-        );
+        // headers.insert(
+        //     HeaderName::from_static("KC-API-SIGN"),
+        //     HeaderValue::try_from(payload).unwrap(),
+        // );
+        // headers.insert(
+        //     HeaderName::from_static("KC-API-TIMESTAMP "),
+        //     HeaderValue::try_from(timestamp).unwrap(),
+        // );
+        // headers.insert(
+        //     HeaderName::from_static("KC-API-PASSPHRASE"),
+        //     HeaderValue::try_from(passphrase).unwrap(),
+        // );
+        // headers.insert(
+        //     HeaderName::from_static("KC-API-KEY-VERSION "),
+        //     HeaderValue::try_from(&api_creds.api_key_version).unwrap(),
+        // );
         headers
     }
 
@@ -223,6 +218,7 @@ impl KucoinInterface {
 
         // Get headers
         let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
+        // let headers = HeaderMap::new(); // TODO: REMOVE THIS
 
         let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
         let url: Url = base_url
@@ -259,7 +255,7 @@ impl KucoinInterface {
                 let res = self
                     .1
                     .post(url) // TODO: Should be private endpoint and use creds
-                    .headers(headers.await)
+                    .headers(headers)
                     .send()
                     .await
                     .expect("failed to post reqwest")
@@ -269,19 +265,10 @@ impl KucoinInterface {
                 Some(self.response(res))
             }
             KucoinRequestType::OrderPost => {
-                // println!(
-                //     "Key: {}\nPayload: {}\nTimestamp: {}\nPassphrase: {}\nVersion: {}\nJson: {}",
-                //     self.0.api_key,
-                //     b64_signed_payload,
-                //     since_the_epoch,
-                //     b64_signed_passphrase,
-                //     self.0.api_key_version,
-                //     json
-                // );
                 let res = self
                     .1
                     .post(url)
-                    .headers(headers.await)
+                    .headers(headers)
                     .json(&json)
                     .send()
                     .await
@@ -326,7 +313,7 @@ impl KucoinInterface {
     }
 
     // The clones here are delibrate
-    pub async fn clone_keys(&self) -> KucoinCreds {
+    pub fn clone_keys(&self) -> KucoinCreds {
         KucoinCreds {
             api_key: self.0.api_key.to_owned(),
             api_passphrase: self.0.api_passphrase.to_owned(),

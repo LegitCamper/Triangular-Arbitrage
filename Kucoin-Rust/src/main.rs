@@ -4,8 +4,7 @@ use tokio::{runtime::Builder, sync::mpsc}; //, task};
 
 // my Libraries
 use kucoin_arbitrage::{
-    create_valid_pairs_catalog, execute_trades, find_triangular_arbitrage,
-    kucoin_interface::{KucoinInterface, KucoinRequestType},
+    create_valid_pairs_catalog, find_triangular_arbitrage, kucoin_interface::KucoinInterface,
     kucoin_websocket::kucoin_websocket,
 };
 
@@ -15,11 +14,10 @@ async fn main() {
     let kucoin_interface = Arc::new(KucoinInterface::new());
 
     // Retreive temporary websocket token
-    let Some(websocket_info) = kucoin_interface.clone().get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
-    println!("{:?}", websocket_info);
+    let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
 
     // Get all coin info
-    let Some(pair_info) = kucoin_interface.clone().get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
+    let Some(pair_info) = kucoin_interface.get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
 
     // Gets valid pair combinations
     let pair_combinations = create_valid_pairs_catalog(pair_info).await;
@@ -34,7 +32,7 @@ async fn main() {
         .unwrap();
 
     let (websocket_writer, websocket_reader) = mpsc::channel(100); // mpsc channel for websocket and validator
-    let (validator_writer, validator_reader) = mpsc::channel(1); // channel to execute order
+    let (validator_writer, _validator_reader) = mpsc::channel(1); // channel to execute order
 
     let websocket_task = runtime.spawn(async move {
         kucoin_websocket(websocket_info, websocket_writer).await
@@ -51,11 +49,11 @@ async fn main() {
         .await;
     });
 
-    let ordering_task =
-        runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
+    // let ordering_task =
+    // runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
 
     // await tasks
     websocket_task.await.unwrap();
     validator_task.await.unwrap();
-    ordering_task.await.unwrap();
+    // ordering_task.await.unwrap();
 }

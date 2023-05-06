@@ -3,7 +3,7 @@ pub mod kucoin_websocket;
 
 use crate::{
     kucoin_interface::{
-        KucoinInterface, KucoinRequestOrderPost, KucoinRequestType, KucoinResponseL1,
+        KucoinInterface, KucoinRequestOrderPost, KucoinResponseL1,
     },
     kucoin_websocket::{KucoinWebsocketResponseL0, KucoinWebsocketResponseL1},
 };
@@ -261,7 +261,7 @@ pub async fn find_triangular_arbitrage(
 // }
 
 pub async fn execute_trades(
-    kucoin_interface: Arc<KucoinInterface>,
+    _kucoin_interface: Arc<KucoinInterface>,
     mut validator_reader: mpsc::Receiver<Vec<OrderStruct>>,
 ) {
     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
