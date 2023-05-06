@@ -1,3 +1,12 @@
+use crate::kucoin_interface::KucoinCreds;
+use crate::kucoin_interface::KucoinResponseL1 as KucoinRestResponse;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use serde_this_or_that::as_f64;
+use tokio::sync::mpsc;
+use url::Url;
+
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 struct WebsocketDetailsL1 {
@@ -71,31 +80,13 @@ struct KucoinWebsocketResponseL1 {
 }
 
 pub async fn kucoin_websocket(
-    api_creds: KucoinCreds,
-    // websocket_token: String,
+    websocket_info: KucoinRestResponse,
     channel_writer: mpsc::Sender<KucoinWebsocketResponse>,
 ) {
-    let empty_json_request = EmptyKucoinJson {
-        string: "Nothing to see here!".to_string(),
-    };
-    // retreive temporary api token
-    let websocket_info: WebsocketDetailsL1 = match kucoin_request(
-        &api_creds,
-        reqwest::Client::new(), // makes http client
-        "/api/v1/bullet-public",
-        serde_json::to_string(&empty_json_request).expect("Failed to Serialize"), // no json params req
-        KucoinRequestType::WebsocketToken,
-    )
-    .await
-    {
-        Some(x) => serde_json::from_str(&x).expect("Cant't parse from json"),
-        None => panic!("Did not get valid response from kucoin"),
-    };
-
     let websocket_url = Url::parse(
         format!(
             "{}?token={}",
-            websocket_info.data.instanceServers[0].endpoint, websocket_info.data.token
+            websocket_info.instanceServers[0].endpoint, websocket_info.token
         )
         .as_str(),
     )
@@ -103,7 +94,7 @@ pub async fn kucoin_websocket(
 
     // Searilize kucoin subscription
     let kucoin_id: i32 = rand::thread_rng().gen_range(13..15);
-    let subscription = json!(kucoin_websocket_subscription {
+    let subscription = json!(KucoinWebsocketSubscription {
         id: kucoin_id,
         r#type: "subscribe".to_string(),
         topic: "/market/ticker:all".to_string(),
@@ -111,7 +102,7 @@ pub async fn kucoin_websocket(
         response: "false".to_string(),
     });
     // Searilize kucoin ping message
-    let ping = json!(kucoin_webscoket_ping {
+    let ping = json!(KucoinWebscoketPing {
         id: kucoin_id,
         r#type: "ping".to_string()
     });
@@ -143,7 +134,7 @@ pub async fn kucoin_websocket(
                 .await
                 .expect("Failed to send ping to websocket");
             workflow_core::task::sleep(std::time::Duration::from_millis(
-                websocket_info.data.instanceServers[0]
+                websocket_info.instanceServers[0]
                     .pingInterval
                     .try_into()
                     .unwrap(),
@@ -159,7 +150,7 @@ pub async fn kucoin_websocket(
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
                 if x.contains("message") {
-                    let res: Kucoin_websocket_response =
+                    let res: KucoinWebsocketResponse =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(res).await.expect("Failed to send");
                 } else {

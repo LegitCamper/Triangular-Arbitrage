@@ -859,6 +859,7 @@ dependencies = [
  "duration-string",
  "futures",
  "native-tls",
+ "optional-field",
  "rand",
  "reqwest",
  "ring",
@@ -1019,6 +1020,27 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "optional-field"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59467f96f81e21832b9c288499c5830f4f97fcab785b33ca3dbb8346db517027"
+dependencies = [
+ "optional-fields-serde-macro",
+ "serde",
+]
+
+[[package]]
+name = "optional-fields-serde-macro"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d31df4973a2272faf744696144d1d0b2614481f1f4a0dbfead454b2e5d9f0a8f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -1343,9 +1365,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.152"
+version = "1.0.162"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
+checksum = "71b2f6e1ab5c2b98c05f0f35b236b22e8df7ead6ffbf51d7808da7f8817e7ab6"
 dependencies = [
  "serde_derive",
 ]
@@ -1372,13 +1394,13 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.152"
+version = "1.0.162"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
+checksum = "a2a0814352fd64b58489904a44ea8d90cb1a91dcb6b4f5ebabc32c8318e93cb6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.107",
+ "syn 2.0.15",
 ]
 
 [[package]]

@@ -59,54 +59,64 @@ pub struct KucoinResponseL0 {
 #[serde(rename_all = "snake_case")]
 // data tier
 pub struct KucoinResponseL1 {
-    token: String, // Only returned with websocket token
-    instanceServers: Vec<KucoinResponseL2>,
-    ticker: Vec<KucoinResponseL2>,
+    #[serde(skip)]
+    pub token: String,
+    #[serde(skip)]
+    pub instanceServers: Vec<KucoinResponseL2Websocket>,
+    #[serde(skip)]
+    pub ticker: Vec<KucoinResponseL2Coins>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 #[serde(rename_all = "snake_case")]
-pub struct KucoinResponseL2 {
+pub struct KucoinResponseL2Coins {
     // for pair response
-    symbol: String,
-    symbolName: String,
+    pub symbol: String,
+    pub symbolName: String,
     #[serde(deserialize_with = "as_f64")]
-    buy: f64,
+    pub buy: f64,
     #[serde(deserialize_with = "as_f64")]
-    sell: f64,
+    pub sell: f64,
     #[serde(deserialize_with = "as_f64")]
-    changeRate: f64,
+    pub changeRate: f64,
     #[serde(deserialize_with = "as_f64")]
-    changePrice: f64,
+    pub changePrice: f64,
     #[serde(deserialize_with = "as_f64")]
-    high: f64,
+    pub high: f64,
     #[serde(deserialize_with = "as_f64")]
-    low: f64,
+    pub low: f64,
     #[serde(deserialize_with = "as_u64")]
-    vol: u64,
+    pub vol: u64,
     #[serde(deserialize_with = "as_f64")]
-    volValue: f64,
+    pub volValue: f64,
     #[serde(deserialize_with = "as_f64")]
-    last: f64,
+    pub last: f64,
     #[serde(deserialize_with = "as_f64")]
-    averagePrice: f64,
+    pub averagePrice: f64,
     #[serde(deserialize_with = "as_f64")]
-    takerFeeRate: f64,
+    pub takerFeeRate: f64,
     #[serde(deserialize_with = "as_f64")]
-    makerFeeRate: f64,
+    pub makerFeeRate: f64,
     #[serde(deserialize_with = "as_f64")]
-    takerCoefficient: f64,
+    pub takerCoefficient: f64,
     #[serde(deserialize_with = "as_f64")]
-    makerCoefficient: f64,
+    pub makerCoefficient: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[allow(dead_code)]
+#[serde(rename_all = "snake_case")]
+pub struct KucoinResponseL2Websocket {
     // for websocket tocker response
-    endpoint: String,
-    encrypt: bool,
+    pub endpoint: String,
+    pub encrypt: bool,
     #[serde(deserialize_with = "as_u64")]
-    pingInterval: u64,
+    pub pingInterval: u64,
     #[serde(deserialize_with = "as_u64")]
-    pingTimeout: u64,
+    pub pingTimeout: u64,
 }
 
 impl KucoinInterface {
@@ -233,9 +243,7 @@ impl KucoinInterface {
 
     fn response(self, response: String) -> KucoinResponseL1 {
         // TODO: maybe parse the status code here and panic with better errors
-        println!("{}", response);
-        let l1: KucoinResponseL0 = serde_json::from_str(&response).expect("fuckj");
-        // println!("{:?}", l1);
+        let l1: KucoinResponseL0 = serde_json::from_str(&response).unwrap();
         if l1.code != 200000 {
             panic!(
                 "Unable to read Kucoin Reponse\nSomething Probably Went Wrong\n{:?}",
@@ -246,13 +254,14 @@ impl KucoinInterface {
         }
     }
 
-    // pub async fn get_pairs(self) -> Option<KucoinResponseL0> {
-    //     self.request(
-    //         "/api/v1/market/allTickers",
-    //         String::from(""),
-    //         KucoinRequestType::Get,
-    //     );
-    // }
+    pub async fn get_pairs(self) -> Option<KucoinResponseL1> {
+        self.request(
+            "/api/v1/market/allTickers",
+            String::from(""),
+            KucoinRequestType::Get,
+        )
+        .await
+    }
 
     pub fn clone_keys(self) -> KucoinCreds {
         KucoinCreds {

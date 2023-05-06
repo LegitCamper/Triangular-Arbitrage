@@ -6,14 +6,26 @@ use tokio::{runtime::Builder, sync::mpsc}; //, task};
 //     create_valid_pairs_catalog, execute_trades, find_triangular_arbitrage, get_kucoin_creds,
 //     kucoin_websocket, KucoinCreds,
 // };
-use kucoin_arbitrage::kucoin_interface::{self as kucoin_api, KucoinInterface};
+
+use kucoin_arbitrage::kucoin_interface::{self as kucoin_api, KucoinInterface, KucoinRequestType};
 
 #[tokio::main]
 async fn main() {
-    let kucoin_interface = kucoin_api::KucoinInterface.new();
-    // // Gets valid pair combinations
-    // let pair_combinations = create_valid_pairs_catalog(kucoin_keys).await; // creates json with all the coins
-    // println!("Generated Valid Coin Pairs successfully");
+    let kucoin_interface = KucoinInterface::new();
+
+    // retreive temporary websocket token
+    let websocket_info = &kucoin_interface
+        .request(
+            "/api/v1/bullet-public", // TODO: This should be private and auth with creds
+            String::from(""),
+            KucoinRequestType::WebsocketToken,
+        )
+        .await;
+
+    // Gets valid pair combinations
+    let pair_combinations = kucoin_interface.get_pairs().await; // creates json with all the coins
+    println!("Generated Valid Coin Pairs successfully");
+    println!("{:?}", pair_combinations);
 
     // // build runtime - ensure tasks are being allocated their own thread
     // let runtime = Builder::new_multi_thread()
