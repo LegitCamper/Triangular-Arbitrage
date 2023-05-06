@@ -50,38 +50,40 @@ struct KucoinWebscoketPing {
 #[allow(non_snake_case)]
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-pub struct KucoinWebsocketResponse {
-    r#type: String,
-    topic: String,
-    subject: String,
-    data: KucoinWebsocketResponseL1,
+#[serde(rename_all = "snake_case")]
+pub struct KucoinWebsocketResponseL0 {
+    pub r#type: String,
+    pub topic: String,
+    pub subject: String,
+    pub data: KucoinWebsocketResponseL1,
 }
 #[derive(Clone)]
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
-struct KucoinWebsocketResponseL1 {
+#[serde(rename_all = "snake_case")]
+pub struct KucoinWebsocketResponseL1 {
     #[serde(deserialize_with = "as_f64")]
-    bestAsk: f64,
+    pub bestAsk: f64,
     #[serde(deserialize_with = "as_f64")]
-    bestAskSize: f64,
+    pub bestAskSize: f64,
     #[serde(deserialize_with = "as_f64")]
-    bestBid: f64,
+    pub bestBid: f64,
     #[serde(deserialize_with = "as_f64")]
-    bestBidSize: f64,
+    pub bestBidSize: f64,
     #[serde(deserialize_with = "as_f64")]
-    price: f64,
+    pub price: f64,
     #[serde(deserialize_with = "as_f64")]
-    sequence: f64,
+    pub sequence: f64,
     #[serde(deserialize_with = "as_f64")]
-    size: f64,
+    pub size: f64,
     #[serde(deserialize_with = "as_f64")]
-    time: f64,
+    pub time: f64,
 }
 
 pub async fn kucoin_websocket(
     websocket_info: KucoinRestResponse,
-    channel_writer: mpsc::Sender<KucoinWebsocketResponse>,
+    channel_writer: mpsc::Sender<KucoinWebsocketResponseL0>,
 ) {
     let websocket_url = Url::parse(
         format!(
@@ -134,10 +136,7 @@ pub async fn kucoin_websocket(
                 .await
                 .expect("Failed to send ping to websocket");
             workflow_core::task::sleep(std::time::Duration::from_millis(
-                websocket_info.instanceServers[0]
-                    .pingInterval
-                    .try_into()
-                    .unwrap(),
+                websocket_info.instanceServers[0].pingInterval,
             ))
             .await;
         }
@@ -150,7 +149,7 @@ pub async fn kucoin_websocket(
             let response = ws_read.recv();
             if let Ok(workflow_websocket::client::Message::Text(x)) = response.await {
                 if x.contains("message") {
-                    let res: KucoinWebsocketResponse =
+                    let res: KucoinWebsocketResponseL0 =
                         serde_json::from_str(x.as_str()).expect("Cannot desearlize websocket data");
                     channel_writer.send(res).await.expect("Failed to send");
                 } else {
