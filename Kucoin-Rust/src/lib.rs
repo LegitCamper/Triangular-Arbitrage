@@ -3,7 +3,7 @@ pub mod kucoin_websocket;
 
 use crate::{
     kucoin_interface::{
-        KucoinCreds, KucoinInterface, KucoinRequestOrderPost, KucoinRequestType, KucoinResponseL1,
+        KucoinInterface, KucoinRequestOrderPost, KucoinRequestType, KucoinResponseL1,
     },
     kucoin_websocket::{KucoinWebsocketResponseL0, KucoinWebsocketResponseL1},
 };
@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 
 // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI" // TODO: this is static rn so dont add to the list
-const STARTING_AMOUNT: f64 = 100.0; // Staring amount in USD
+const STARTING_AMOUNT: f64 = 50.0; // Staring amount in USD
 const MINIMUN_PROFIT: f64 = 0.1; // in USD
 
 /////////////////////////////////////////////////////////  create_valid_pairs_catalog  /////////////////////////////////////////////////////////
@@ -264,15 +264,9 @@ pub async fn execute_trades(
     kucoin_interface: Arc<KucoinInterface>,
     mut validator_reader: mpsc::Receiver<Vec<OrderStruct>>,
 ) {
-    // Get values from inside mutex
-    // let api_creds = api_creds_mutex.lock().unwrap();
-
     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
 
     while let Some(msg) = validator_reader.recv().await {
-        //  TODO: Implement rate limiting for items in channel while working
-        //     - this hould be working now that I have the mpsc buffer set to 1
-
         // Iterates through each order in msg
         for order in msg {
             let json_order = match order.side {
@@ -293,16 +287,14 @@ pub async fn execute_trades(
                     clientOid: rng.gen(),
                 },
             };
-            let kucoin_response = kucoin_interface
-                .request(
-                    "/api/v1/orders",
-                    serde_json::to_string(&json_order).expect("Failed to Serialize"),
-                    KucoinRequestType::OrderPost,
-                )
-                .await;
-            println!("Order Response: {:?}", kucoin_response); // TODO: Remove this
+            // let kucoin_response = kucoin_interface.lock().await.request(
+            //     "api/v1/orders",
+            //     serde_json::to_string(&json_order).expect("Failed to Serialize"),
+            //     KucoinRequestType::OrderPost,
+            // );
+            // println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
 
-            // println!("{:?}", json_order) // TODO: Remove This
+            println!("{:?}", json_order) // TODO: Remove This
         }
     }
 }

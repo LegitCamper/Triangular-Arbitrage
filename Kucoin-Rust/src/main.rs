@@ -5,7 +5,7 @@ use tokio::{runtime::Builder, sync::mpsc}; //, task};
 // my Libraries
 use kucoin_arbitrage::{
     create_valid_pairs_catalog, execute_trades, find_triangular_arbitrage,
-    kucoin_interface::{self as kucoin_api, KucoinInterface, KucoinRequestType},
+    kucoin_interface::{KucoinInterface, KucoinRequestType},
     kucoin_websocket::kucoin_websocket,
 };
 
@@ -15,10 +15,11 @@ async fn main() {
     let kucoin_interface = Arc::new(KucoinInterface::new());
 
     // Retreive temporary websocket token
-    let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
+    let Some(websocket_info) = kucoin_interface.clone().get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
+    println!("{:?}", websocket_info);
 
     // Get all coin info
-    let Some(pair_info) = kucoin_interface.get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
+    let Some(pair_info) = kucoin_interface.clone().get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
 
     // Gets valid pair combinations
     let pair_combinations = create_valid_pairs_catalog(pair_info).await;
@@ -51,10 +52,10 @@ async fn main() {
     });
 
     let ordering_task =
-        runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await });
+        runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
 
     // await tasks
     websocket_task.await.unwrap();
     validator_task.await.unwrap();
-    // ordering_task.await.unwrap();
+    ordering_task.await.unwrap();
 }
