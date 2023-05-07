@@ -1,21 +1,19 @@
 use data_encoding::BASE64;
+use hmac::{Hmac, Mac};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Client;
-// use ring::hmac;
-use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_this_or_that::{as_f64, as_u64};
 use sha2::Sha256;
-// use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     fs::File,
     io::BufReader,
     time::{SystemTime, UNIX_EPOCH},
 };
-// use url::quirks::password;
-
 use url::Url;
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug)]
 pub struct KucoinInterface(pub Arc<KucoinCreds>, Client);
@@ -213,23 +211,18 @@ impl KucoinInterface {
             .as_millis()
             .to_string();
 
-        // Signs the api secret with hmac sha256
-        let signed_key = hmac::Key::new(hmac::HMAC_SHA256, self.0.api_secret.as_bytes());
+        let payload_str = format!("{}{}{}{}", &since_the_epoch, "POST", endpoint, json);
+        let mut payload = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+        payload.update(payload_str.as_bytes());
+        let payload_hmac = payload.finalize();
+        let b64_signed_payload: String = BASE64.encode(&payload_hmac.into_bytes());
 
-        // signs kucoin_request_string
-        let payload = format!("{}{}{}{}", &since_the_epoch, "POST", endpoint, json);
-        let signed_payload = hmac::sign(&signed_key, payload.as_bytes());
-        let b64_signed_payload: String = BASE64.encode(signed_payload.as_ref());
+        let mut passphrase = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+        passphrase.update(self.0.api_passphrase.as_bytes());
+        let passphrase_hmac = passphrase.finalize();
+        let b64_signed_passphrase: String = BASE64.encode(&passphrase_hmac.into_bytes());
+        println!("{}", b64_signed_passphrase);
 
-        // Signs/Encrypt passphrase with HMAC-sha256 via API-Secret
-        let signed_passphrase = hmac::sign(&signed_key, self.0.api_passphrase.as_bytes());
-        let b64_signed_passphrase: String = BASE64.encode(signed_passphrase.as_ref());
-        unsafe {
-            println!(
-                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee {:?}",
-                std::str::from_utf8_unchecked(signed_passphrase.as_ref())
-            );
-        }
         // Get headers
         let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
         // let headers = HeaderMap::new(); // TODO: REMOVE THIS
