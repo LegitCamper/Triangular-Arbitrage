@@ -4,8 +4,8 @@ use tokio::{runtime::Builder, sync::mpsc}; //, task};
 
 // my Libraries
 use kucoin_arbitrage::{
-    create_valid_pairs_catalog, find_triangular_arbitrage, kucoin_interface::KucoinInterface,
-    kucoin_websocket::kucoin_websocket,
+    create_valid_pairs_catalog, execute_trades, find_triangular_arbitrage,
+    kucoin_interface::KucoinInterface, kucoin_websocket::kucoin_websocket,
 };
 
 #[tokio::main]
@@ -32,7 +32,7 @@ async fn main() {
         .unwrap();
 
     let (websocket_writer, websocket_reader) = mpsc::channel(100); // mpsc channel for websocket and validator
-    let (validator_writer, _validator_reader) = mpsc::channel(1); // channel to execute order
+    let (validator_writer, validator_reader) = mpsc::channel(1); // channel to execute order
 
     let websocket_task = runtime.spawn(async move {
         kucoin_websocket(websocket_info, websocket_writer).await
@@ -49,11 +49,11 @@ async fn main() {
         .await;
     });
 
-    // let ordering_task =
-    // runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
+    let ordering_task =
+        runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
 
     // await tasks
     websocket_task.await.unwrap();
     validator_task.await.unwrap();
-    // ordering_task.await.unwrap();
+    ordering_task.await.unwrap();
 }

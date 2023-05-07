@@ -3,7 +3,7 @@ pub mod kucoin_websocket;
 
 use crate::{
     kucoin_interface::{
-        KucoinInterface, KucoinRequestOrderPost, KucoinResponseL1,
+        KucoinInterface, KucoinRequestOrderPost, KucoinRequestType, KucoinResponseL1,
     },
     kucoin_websocket::{KucoinWebsocketResponseL0, KucoinWebsocketResponseL1},
 };
@@ -261,7 +261,7 @@ pub async fn find_triangular_arbitrage(
 // }
 
 pub async fn execute_trades(
-    _kucoin_interface: Arc<KucoinInterface>,
+    kucoin_interface: Arc<KucoinInterface>,
     mut validator_reader: mpsc::Receiver<Vec<OrderStruct>>,
 ) {
     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
@@ -287,14 +287,12 @@ pub async fn execute_trades(
                     clientOid: rng.gen(),
                 },
             };
-            // let kucoin_response = kucoin_interface.lock().await.request(
-            //     "api/v1/orders",
-            //     serde_json::to_string(&json_order).expect("Failed to Serialize"),
-            //     KucoinRequestType::OrderPost,
-            // );
-            // println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
-
-            println!("{:?}", json_order) // TODO: Remove This
+            let kucoin_response = kucoin_interface.request(
+                "api/v1/orders",
+                serde_json::to_string(&json_order).expect("Failed to Serialize"),
+                KucoinRequestType::OrderPost,
+            );
+            println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
         }
     }
 }

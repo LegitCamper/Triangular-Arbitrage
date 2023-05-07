@@ -4,6 +4,7 @@ use reqwest::Client;
 use ring::hmac;
 use serde::{Deserialize, Serialize};
 use serde_this_or_that::{as_f64, as_u64};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     fs::File,
@@ -162,29 +163,25 @@ impl KucoinInterface {
     }
 
     pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
-        let api_creds = self.clone_keys();
         // Make header type
         let mut headers = HeaderMap::new();
         headers.insert(
-            HeaderName::from_static("KC-API-KEY"),
-            HeaderValue::try_from(&api_creds.api_key).expect("fsdfasdfasdfasdfasdfasdf"),
+            "KC-API-KEY",
+            HeaderValue::from_bytes(self.0.api_key.as_bytes()).unwrap(),
         );
-        // headers.insert(
-        //     HeaderName::from_static("KC-API-SIGN"),
-        //     HeaderValue::try_from(payload).unwrap(),
-        // );
-        // headers.insert(
-        //     HeaderName::from_static("KC-API-TIMESTAMP "),
-        //     HeaderValue::try_from(timestamp).unwrap(),
-        // );
-        // headers.insert(
-        //     HeaderName::from_static("KC-API-PASSPHRASE"),
-        //     HeaderValue::try_from(passphrase).unwrap(),
-        // );
-        // headers.insert(
-        //     HeaderName::from_static("KC-API-KEY-VERSION "),
-        //     HeaderValue::try_from(&api_creds.api_key_version).unwrap(),
-        // );
+        headers.insert("KC-API-SIGN", HeaderValue::try_from(payload).unwrap());
+        headers.insert(
+            "KC-API-TIMESTAMP",
+            HeaderValue::try_from(timestamp).unwrap(),
+        );
+        headers.insert(
+            "KC-API-PASSPHRASE",
+            HeaderValue::try_from(passphrase).unwrap(),
+        );
+        headers.insert(
+            "KC-API-KEY-VERSION",
+            HeaderValue::try_from(self.0.api_key_version.as_bytes()).unwrap(),
+        );
         headers
     }
 
@@ -305,7 +302,7 @@ impl KucoinInterface {
 
     pub async fn get_websocket_info(&self) -> Option<KucoinResponseL1> {
         self.request(
-            "/api/v1/bullet-public", // TODO: This should be private and auth with creds
+            "/api/v1/bullet-private", // TODO: This should be private and auth with creds
             String::from(""),
             KucoinRequestType::WebsocketToken,
         )
