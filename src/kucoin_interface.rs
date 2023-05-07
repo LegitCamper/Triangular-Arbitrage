@@ -1,16 +1,19 @@
 use data_encoding::BASE64;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Client;
-use ring::hmac;
+// use ring::hmac;
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use serde_this_or_that::{as_f64, as_u64};
-use std::str::FromStr;
+use sha2::Sha256;
+// use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     fs::File,
     io::BufReader,
     time::{SystemTime, UNIX_EPOCH},
 };
+// use url::quirks::password;
 
 use url::Url;
 
@@ -53,11 +56,17 @@ pub struct KucoinRequestOrderPost {
 pub struct KucoinResponseL0 {
     #[serde(deserialize_with = "as_u64")]
     code: u64,
+    #[serde(default)]
     data: KucoinResponseL1,
+    #[serde(default)]
+    // only in reponse from order reqest
+    orderId: String,
+    #[serde(default)]
+    msg: String,
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[allow(dead_code)]
 #[serde(rename_all = "snake_case")]
 pub struct KucoinResponseL1 {
@@ -169,18 +178,21 @@ impl KucoinInterface {
             "KC-API-KEY",
             HeaderValue::from_bytes(self.0.api_key.as_bytes()).unwrap(),
         );
-        headers.insert("KC-API-SIGN", HeaderValue::try_from(payload).unwrap());
+        headers.insert(
+            "KC-API-SIGN",
+            HeaderValue::from_bytes(payload.as_bytes()).unwrap(),
+        );
         headers.insert(
             "KC-API-TIMESTAMP",
-            HeaderValue::try_from(timestamp).unwrap(),
+            HeaderValue::from_bytes(timestamp.as_bytes()).unwrap(),
         );
         headers.insert(
             "KC-API-PASSPHRASE",
-            HeaderValue::try_from(passphrase).unwrap(),
+            HeaderValue::from_bytes(passphrase.as_bytes()).unwrap(),
         );
         headers.insert(
             "KC-API-KEY-VERSION",
-            HeaderValue::try_from(self.0.api_key_version.as_bytes()).unwrap(),
+            HeaderValue::from_bytes(self.0.api_key_version.as_bytes()).unwrap(),
         );
         headers
     }
@@ -197,7 +209,7 @@ impl KucoinInterface {
 
         let since_the_epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
+            .unwrap()
             .as_millis()
             .to_string();
 
@@ -212,7 +224,12 @@ impl KucoinInterface {
         // Signs/Encrypt passphrase with HMAC-sha256 via API-Secret
         let signed_passphrase = hmac::sign(&signed_key, self.0.api_passphrase.as_bytes());
         let b64_signed_passphrase: String = BASE64.encode(signed_passphrase.as_ref());
-
+        unsafe {
+            println!(
+                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee {:?}",
+                std::str::from_utf8_unchecked(signed_passphrase.as_ref())
+            );
+        }
         // Get headers
         let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
         // let headers = HeaderMap::new(); // TODO: REMOVE THIS
@@ -233,7 +250,7 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(self.response(res))
+                self.response(res)
             }
             KucoinRequestType::Get => {
                 let res = self
@@ -246,7 +263,7 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(self.response(res))
+                self.response(res)
             }
             KucoinRequestType::WebsocketToken => {
                 let res = self
@@ -259,7 +276,7 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(self.response(res))
+                self.response(res)
             }
             KucoinRequestType::OrderPost => {
                 let res = self
@@ -273,21 +290,19 @@ impl KucoinInterface {
                     .text()
                     .await
                     .expect("failed to get payload");
-                Some(self.response(res))
+                self.response(res)
             }
         }
     }
 
-    fn response(&self, response: String) -> KucoinResponseL1 {
+    fn response(&self, response: String) -> Option<KucoinResponseL1> {
         // TODO: maybe parse the status code here and panic with better errors
         let l1: KucoinResponseL0 = serde_json::from_str(&response).unwrap();
         if l1.code != 200000 {
-            panic!(
-                "Unable to read Kucoin Reponse\nSomething Probably Went Wrong\n{:?}",
-                l1
-            )
+            panic!("Recived Bad Response Status from Kucoin:\n\n{:?}", l1);
+            // None
         } else {
-            l1.data
+            Some(l1.data)
         }
     }
 

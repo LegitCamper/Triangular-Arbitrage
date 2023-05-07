@@ -246,6 +246,7 @@ pub async fn find_triangular_arbitrage(
                             }),
                         }
                     }
+                    println!("{:?}", pairs_tuple);
                     validator_writer.send(orders).await.unwrap();
                 }
             }
@@ -287,6 +288,7 @@ pub async fn execute_trades(
                     clientOid: rng.gen(),
                 },
             };
+            println!("{:?}", json_order);
             let kucoin_response = kucoin_interface.request(
                 "api/v1/orders",
                 serde_json::to_string(&json_order).expect("Failed to Serialize"),
