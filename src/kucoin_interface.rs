@@ -169,7 +169,28 @@ impl KucoinInterface {
         KucoinInterface(Arc::new(api_creds), Client::new())
     }
 
-    pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
+    pub fn get_headers(&self, method: String, endpoint: &str, json: &String) -> HeaderMap {
+        let since_the_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
+
+        let signed_secret = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+
+        let payload_str = format!("{}{:?}{}{}", &since_the_epoch, method, endpoint, json);
+        let mut payload = signed_secret.clone();
+        payload.update(payload_str.as_bytes());
+        let payload_hmac = payload.finalize();
+        let b64_signed_payload: String =
+            BASE64.encode(&format!("{:x}", payload_hmac.into_bytes()).into_bytes());
+
+        let mut passphrase = signed_secret; //.clone();
+        passphrase.update(self.0.api_passphrase.as_bytes());
+        let passphrase_hmac = passphrase.finalize();
+        let b64_signed_passphrase: String =
+            BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
+
         let mut headers = HeaderMap::new();
         headers.insert(
             HeaderName::from_bytes("KC-API-KEY".as_bytes()).unwrap(),
@@ -177,20 +198,25 @@ impl KucoinInterface {
         );
         headers.insert(
             HeaderName::from_bytes("KC-API-SIGN".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(payload.as_bytes()).unwrap(),
+            HeaderValue::from_bytes(b64_signed_payload.as_bytes()).unwrap(),
         );
         headers.insert(
             HeaderName::from_bytes("KC-API-TIMESTAMP".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(timestamp.as_bytes()).unwrap(),
+            HeaderValue::from_bytes(since_the_epoch.as_bytes()).unwrap(),
         );
         headers.insert(
             HeaderName::from_bytes("KC-API-PASSPHRASE".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(passphrase.as_bytes()).unwrap(),
+            HeaderValue::from_bytes(b64_signed_passphrase.as_bytes()).unwrap(),
         );
         headers.insert(
             HeaderName::from_bytes("KC-API-KEY-VERSION".as_bytes()).unwrap(),
             HeaderValue::from_bytes(self.0.api_key_version.as_bytes()).unwrap(),
         );
+
+        println!("{:?}", payload_str);
+        // let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
+        println!("{:?}", headers);
+
         headers
     }
 
@@ -200,36 +226,6 @@ impl KucoinInterface {
         json: String,
         method: KucoinRequestType,
     ) -> Option<KucoinResponseL1> {
-        // alias values in self
-        // let api_creds = &self.0;
-        // let client = &self.1;
-
-        let since_the_epoch = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            .to_string();
-
-        let signed_secret = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
-
-        let payload_str = format!("{}{}{}{}", &since_the_epoch, "POST", endpoint, json);
-        let mut payload = signed_secret.clone();
-        payload.update(payload_str.as_bytes());
-        let payload_hmac = payload.finalize();
-        let b64_signed_payload: String =
-            BASE64.encode(&format!("{:x}", payload_hmac.into_bytes()).into_bytes());
-
-        let mut passphrase = signed_secret.clone();
-        passphrase.update(self.0.api_passphrase.as_bytes());
-        let passphrase_hmac = passphrase.finalize();
-        let b64_signed_passphrase: String =
-            BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
-
-        // Get headers
-        println!("{:?}", endpoint);
-        let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
-        println!("{:?}", headers);
-
         let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
         let url: Url = base_url
             .join(endpoint)
@@ -240,6 +236,7 @@ impl KucoinInterface {
                 let res = self
                     .1
                     .post(url)
+                    .headers(self.get_headers(String::from("POST"), endpoint, &json))
                     .send()
                     .await
                     .expect("failed to post reqwest")
@@ -252,6 +249,7 @@ impl KucoinInterface {
                 let res = self
                     .1
                     .get(url)
+                    .headers(self.get_headers(String::from("GET"), endpoint, &json))
                     .json(&json)
                     .send()
                     .await
@@ -265,7 +263,8 @@ impl KucoinInterface {
                 let res = self
                     .1
                     .post(url) // TODO: Should be private endpoint and use creds
-                    .headers(headers)
+                    .headers(self.get_headers(String::from("POST"), endpoint, &json))
+                    .json(&json)
                     .send()
                     .await
                     .expect("failed to post reqwest")
@@ -278,7 +277,7 @@ impl KucoinInterface {
                 let res = self
                     .1
                     .post(url)
-                    .headers(headers)
+                    .headers(self.get_headers(String::from("POST"), endpoint, &json))
                     .json(&json)
                     .send()
                     .await
