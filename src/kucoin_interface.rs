@@ -170,26 +170,25 @@ impl KucoinInterface {
     }
 
     pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
-        // Make header type
         let mut headers = HeaderMap::new();
         headers.insert(
-            "KC-API-KEY",
+            HeaderName::from_bytes("KC-API-KEY".as_bytes()).unwrap(),
             HeaderValue::from_bytes(self.0.api_key.as_bytes()).unwrap(),
         );
         headers.insert(
-            "KC-API-SIGN",
+            HeaderName::from_bytes("KC-API-SIGN".as_bytes()).unwrap(),
             HeaderValue::from_bytes(payload.as_bytes()).unwrap(),
         );
         headers.insert(
-            "KC-API-TIMESTAMP",
+            HeaderName::from_bytes("KC-API-TIMESTAMP".as_bytes()).unwrap(),
             HeaderValue::from_bytes(timestamp.as_bytes()).unwrap(),
         );
         headers.insert(
-            "KC-API-PASSPHRASE",
+            HeaderName::from_bytes("KC-API-PASSPHRASE".as_bytes()).unwrap(),
             HeaderValue::from_bytes(passphrase.as_bytes()).unwrap(),
         );
         headers.insert(
-            "KC-API-KEY-VERSION",
+            HeaderName::from_bytes("KC-API-KEY-VERSION".as_bytes()).unwrap(),
             HeaderValue::from_bytes(self.0.api_key_version.as_bytes()).unwrap(),
         );
         headers
@@ -211,21 +210,25 @@ impl KucoinInterface {
             .as_millis()
             .to_string();
 
+        let signed_secret = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+
         let payload_str = format!("{}{}{}{}", &since_the_epoch, "POST", endpoint, json);
-        let mut payload = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+        let mut payload = signed_secret.clone();
         payload.update(payload_str.as_bytes());
         let payload_hmac = payload.finalize();
-        let b64_signed_payload: String = BASE64.encode(&payload_hmac.into_bytes());
+        let b64_signed_payload: String =
+            BASE64.encode(&format!("{:x}", payload_hmac.into_bytes()).into_bytes());
 
-        let mut passphrase = HmacSha256::new_from_slice(self.0.api_secret.as_bytes()).unwrap();
+        let mut passphrase = signed_secret.clone();
         passphrase.update(self.0.api_passphrase.as_bytes());
         let passphrase_hmac = passphrase.finalize();
-        let b64_signed_passphrase: String = BASE64.encode(&passphrase_hmac.into_bytes());
-        println!("{}", b64_signed_passphrase);
+        let b64_signed_passphrase: String =
+            BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
 
         // Get headers
+        println!("{:?}", endpoint);
         let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
-        // let headers = HeaderMap::new(); // TODO: REMOVE THIS
+        println!("{:?}", headers);
 
         let base_url: Url = Url::parse("https://api.kucoin.com").unwrap();
         let url: Url = base_url
@@ -310,7 +313,7 @@ impl KucoinInterface {
 
     pub async fn get_websocket_info(&self) -> Option<KucoinResponseL1> {
         self.request(
-            "/api/v1/bullet-private", // TODO: This should be private and auth with creds
+            "/api/v1/bullet-public", // TODO: This should be private and auth with creds
             String::from(""),
             KucoinRequestType::WebsocketToken,
         )
