@@ -4,7 +4,6 @@ pub mod websocket;
 pub use interface::{KucoinInterface, KucoinRequestOrderPost, KucoinRequestType, KucoinResponseL1};
 pub use websocket::{kucoin_websocket, KucoinWebsocketResponseL0, KucoinWebsocketResponseL1};
 
-use futures::channel::mpsc::Receiver;
 use rand::prelude::*;
 // use serde::Serialize;
 use std::{collections::HashMap, sync::Arc};
@@ -117,7 +116,7 @@ enum ArbOrd {
     Sell(String, String),
 }
 
-// TODO: should calulate this during catalog build in the future to prevent waisted IO
+// TODO: should calulate this during catalog build in the future to prevent wasted IO
 fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
     let mut order: Vec<ArbOrd> = vec![];
 
@@ -187,7 +186,6 @@ fn calculate_profitablity(
     coin_amount
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OrderStruct {
     side: ArbOrd,
@@ -287,7 +285,7 @@ pub async fn execute_trades(
             println!("{:?}", json_order);
             let kucoin_response = kucoin_interface.request(
                 "api/v1/orders",
-                serde_json::to_string(&json_order).expect("Failed to Serialize"),
+                Some(serde_json::to_string(&json_order).expect("Failed to Serialize")),
                 KucoinRequestType::OrderPost,
             );
             println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
