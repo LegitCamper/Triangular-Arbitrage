@@ -1,5 +1,4 @@
-
-use crate::kucoin_interface::KucoinResponseL1 as KucoinRestResponse;
+use crate::kucoin::KucoinResponseL1 as KucoinRestResponse;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

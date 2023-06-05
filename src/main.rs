@@ -1,38 +1,12 @@
-// Libraries
 use std::{collections::HashMap, sync::Arc};
-use tokio::{runtime::Builder, sync::mpsc}; //, task};
+use tokio::{runtime::Builder, sync::mpsc};
 
-// // my Libraries
-// use kucoin_arbitrage::{
-//     create_valid_pairs_catalog, execute_trades, find_triangular_arbitrage,
-//     kucoin_interface::{KucoinInterface, get_creds()}, kucoin_websocket::kucoin_websocket,
-// };
-
-use kucoin_arbitrage::kucoin_interface::get_creds;
-
-use kucoin_rs::kucoin::client::{Credentials, Kucoin, KucoinEnv};
+mod kucoin;
+use kucoin::*;
 
 #[tokio::main]
 async fn main() {
-    let keys = get_creds();
-    let api = Kucoin::new(
-        KucoinEnv::Live,
-        Some(Credentials::new(
-            keys.api_key.as_str(),
-            keys.api_passphrase.as_str(),
-            keys.api_secret.as_str(),
-        )),
-    )
-    .expect("Failed to signin");
-
-    // api.post(
-    //     "https://api.kucoin.com/api/v1/bullet-private".to_string(),
-    //     None,
-    //     None,
-    // )
-    // .await;
-
-    println!("{:?}", api.get_symbol_list(None).await.unwrap());
+    let kucoin_interface = Arc::new(KucoinInterface::new());
 
     // // Retreive temporary websocket token
     // let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
