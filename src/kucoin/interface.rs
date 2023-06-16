@@ -1,7 +1,7 @@
 use data_encoding::BASE64;
 use hmac::{Hmac, Mac};
 use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue},
+    header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE},
     Client,
 };
 use serde::{Deserialize, Serialize};
@@ -195,25 +195,26 @@ impl KucoinInterface {
     pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(
-            HeaderName::from_bytes("KC-API-KEY".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(self.creds.api_key.as_bytes()).unwrap(),
+            HeaderName::from_static("kc-api-key"),
+            HeaderValue::from_str(&self.creds.api_key).unwrap(),
         );
         headers.insert(
-            HeaderName::from_bytes("KC-API-SIGN".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(payload.as_bytes()).unwrap(),
+            HeaderName::from_static("kc-api-sign"),
+            HeaderValue::from_str(&payload).unwrap(),
         );
         headers.insert(
-            HeaderName::from_bytes("KC-API-TIMESTAMP".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(timestamp.as_bytes()).unwrap(),
+            HeaderName::from_static("kc-api-timestamp"),
+            HeaderValue::from_str(&timestamp).unwrap(),
         );
         headers.insert(
-            HeaderName::from_bytes("KC-API-PASSPHRASE".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(passphrase.as_bytes()).unwrap(),
+            HeaderName::from_static("kc-api-passphrase"),
+            HeaderValue::from_str(&passphrase).unwrap(),
         );
         headers.insert(
-            HeaderName::from_bytes("KC-API-KEY-VERSION".as_bytes()).unwrap(),
-            HeaderValue::from_bytes(self.creds.api_key_version.as_bytes()).unwrap(),
+            HeaderName::from_static("kc-api-key-version"),
+            HeaderValue::from_str(&self.creds.api_key_version).unwrap(),
         );
+        headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
         println!("{:?}", headers);
         headers
     }
@@ -251,10 +252,9 @@ impl KucoinInterface {
         let passphrase_hmac = passphrase.finalize();
         let b64_signed_passphrase: String =
             BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
-        println!("{}", b64_signed_passphrase);
 
         // Get headers
-        let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch);
+        let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch); //  b64_signed_passphrase
 
         let base_url: &str = match self.config.enviroment {
             KucoinEnviroment::Live => "api.kucoin.com",
@@ -268,6 +268,7 @@ impl KucoinInterface {
                 let res = self
                     .client
                     .post(url)
+                    .headers(headers)
                     .send()
                     .await
                     .expect("failed to post reqwest")
@@ -321,6 +322,7 @@ impl KucoinInterface {
     }
 
     fn response(&self, response: String) -> Option<KucoinResponseL1> {
+        println!("{}", response);
         // TODO: maybe parse the status code here and panic with better errors
         let l1: KucoinResponseL0 = serde_json::from_str(&response).unwrap();
         if l1.code != 200000 {

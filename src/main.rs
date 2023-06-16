@@ -8,11 +8,11 @@ use kucoin::*;
 async fn main() {
     let kucoin_interface = Arc::new(KucoinInterface::new());
 
-    // Retreive temporary websocket token
-    let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
-
     let Some(data) = kucoin_interface.get_account().await else { panic! ("Unable to Retrive Token data from Kucoin") };
     println!("{:?}", data);
+
+    // Retreive temporary websocket token
+    let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
 
     // Get all coin info
     let Some(pair_info) = kucoin_interface.get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
