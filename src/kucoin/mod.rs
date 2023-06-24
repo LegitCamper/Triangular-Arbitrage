@@ -285,7 +285,7 @@ pub async fn execute_trades(
             println!("{:?}", json_order);
             let kucoin_response = kucoin_interface.request(
                 "api/v1/orders",
-                serde_json::to_string(&json_order).expect("Failed to Serialize"),
+                Some(serde_json::to_string(&json_order).expect("Failed to Serialize")),
                 KucoinRequestType::OrderPost,
             );
             println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this

@@ -192,37 +192,10 @@ impl KucoinInterface {
         }
     }
 
-    pub fn get_headers(&self, payload: String, passphrase: String, timestamp: String) -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            HeaderName::from_static("kc-api-key"),
-            HeaderValue::from_str(&self.creds.api_key).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("kc-api-sign"),
-            HeaderValue::from_str(&payload).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("kc-api-timestamp"),
-            HeaderValue::from_str(&timestamp).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("kc-api-passphrase"),
-            HeaderValue::from_str(&passphrase).unwrap(),
-        );
-        headers.insert(
-            HeaderName::from_static("kc-api-key-version"),
-            HeaderValue::from_str(&self.creds.api_key_version).unwrap(),
-        );
-        headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
-        println!("{:?}", headers);
-        headers
-    }
-
     pub async fn request(
         &self,
         endpoint: &str,
-        json: String,
+        json: Option<String>, //Option<KucoinRequestOrderPost>,
         method: KucoinRequestType,
     ) -> Option<KucoinResponseL1> {
         let since_the_epoch = SystemTime::now() // this is wrong // TODO: need to convert to UTC
@@ -240,7 +213,10 @@ impl KucoinInterface {
             KucoinRequestType::WebsocketToken => "POST",
         };
 
-        let payload_str = format!("{}{}{}{}", &since_the_epoch, method_str, endpoint, json);
+        let payload_str = match json {
+            Some(data) => format!("{}{}{}{}", &since_the_epoch, method_str, endpoint, data),
+            None => format!("{}{}{}", &since_the_epoch, method_str, endpoint),
+        };
         let mut payload = signed_secret.clone();
         payload.update(payload_str.as_bytes());
         let payload_hmac = payload.finalize();
@@ -254,7 +230,6 @@ impl KucoinInterface {
             BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
 
         // Get headers
-        let headers = self.get_headers(b64_signed_payload, b64_signed_passphrase, since_the_epoch); //  b64_signed_passphrase
 
         let base_url: &str = match self.config.enviroment {
             KucoinEnviroment::Live => "api.kucoin.com",
@@ -263,62 +238,44 @@ impl KucoinInterface {
         let url: Url = Url::parse(&format!("https://{}{}", base_url, endpoint))
             .expect("Was unable to join the endpoint and base_url");
 
-        match method {
-            KucoinRequestType::Post => {
-                let res = self
-                    .client
-                    .post(url)
-                    .headers(headers)
-                    .send()
-                    .await
-                    .expect("failed to post reqwest")
-                    .text()
-                    .await
-                    .expect("failed to get payload");
-                self.response(res)
-            }
-            KucoinRequestType::Get => {
-                let res = self
-                    .client
-                    .get(url)
-                    .headers(headers)
-                    .body(json.into_bytes())
-                    .send()
-                    .await
-                    .expect("failed to get reqwest")
-                    .text()
-                    .await
-                    .expect("failed to get payload");
-                self.response(res)
-            }
-            KucoinRequestType::WebsocketToken => {
-                let res = self
-                    .client
-                    .post(url)
-                    .headers(headers)
-                    .send()
-                    .await
-                    .expect("failed to post reqwest")
-                    .text()
-                    .await
-                    .expect("failed to get payload");
-                self.response(res)
-            }
-            KucoinRequestType::OrderPost => {
-                let res = self
-                    .client
-                    .post(url)
-                    .headers(headers)
-                    .body(json.into_bytes())
-                    .send()
-                    .await
-                    .expect("failed to post reqwest")
-                    .text()
-                    .await
-                    .expect("failed to get payload");
-                self.response(res)
-            }
-        }
+        let client = match method {
+            KucoinRequestType::Post => self.client.post(url),
+            KucoinRequestType::Get => self.client.get(url),
+            KucoinRequestType::WebsocketToken => self.client.post(url),
+            KucoinRequestType::OrderPost => self.client.post(url),
+        };
+        let client = client
+            .header(CONTENT_TYPE, "application/json")
+            .header(
+                HeaderName::from_static("kc-api-key-version"),
+                HeaderValue::from_str(&self.creds.api_key_version).unwrap(),
+            )
+            .header(
+                HeaderName::from_static("kc-api-passphrase"),
+                HeaderValue::from_str(&b64_signed_passphrase).unwrap(),
+            )
+            .header(
+                HeaderName::from_static("kc-api-timestamp"),
+                HeaderValue::from_str(&since_the_epoch).unwrap(),
+            )
+            .header(
+                HeaderName::from_static("kc-api-sign"),
+                HeaderValue::from_str(&b64_signed_payload).unwrap(),
+            )
+            .header(
+                HeaderName::from_static("kc-api-key"),
+                HeaderValue::from_str(&self.creds.api_key).unwrap(),
+            );
+        let client = client.body(payload_str);
+        self.response(
+            client
+                .send()
+                .await
+                .expect("failed to post reqwest")
+                .text()
+                .await
+                .expect("failed to get payload"),
+        )
     }
 
     fn response(&self, response: String) -> Option<KucoinResponseL1> {
@@ -333,23 +290,19 @@ impl KucoinInterface {
     }
 
     pub async fn get_pairs(&self) -> Option<KucoinResponseL1> {
-        self.request(
-            "/api/v1/market/allTickers",
-            "".to_string(),
-            KucoinRequestType::Get,
-        )
-        .await
+        self.request("/api/v1/market/allTickers", None, KucoinRequestType::Get)
+            .await
     }
 
     pub async fn get_account(&self) -> Option<KucoinResponseL1> {
-        self.request("/api/v1/accounts", "".to_string(), KucoinRequestType::Get)
+        self.request("/api/v1/accounts", None, KucoinRequestType::Get)
             .await
     }
 
     pub async fn get_websocket_info(&self) -> Option<KucoinResponseL1> {
         self.request(
             "/api/v1/bullet-public", // TODO: This should be private and auth with creds
-            "".to_string(),
+            None,
             KucoinRequestType::WebsocketToken,
         )
         .await
