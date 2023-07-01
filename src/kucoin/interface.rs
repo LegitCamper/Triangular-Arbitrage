@@ -1,9 +1,6 @@
 use data_encoding::BASE64;
 use hmac::{Hmac, Mac};
-use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE},
-    Client,
-};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_this_or_that::{as_f64, as_u64};
 use sha2::Sha256;
@@ -45,16 +42,16 @@ pub enum KucoinRequestType {
     WebsocketToken,
 }
 
-#[allow(non_snake_case)]
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Debug, Clone)]
 pub struct KucoinRequestOrderPost {
-    pub timeInForce: String,
+    #[serde(rename = "timeInForce")]
+    pub time_in_force: String,
     pub size: f64,
     pub price: f64,
     pub symbol: String,
     pub side: String,
-    pub clientOid: u32,
+    #[serde(rename = "clientOid")]
+    pub client_o_id: u32,
 }
 
 #[allow(non_snake_case)]
@@ -184,7 +181,6 @@ impl KucoinInterface {
             serde_json::from_reader(BufReader::new(config_file))
                 .expect("unable to parse KucoinKeys.json");
 
-        // Makes new reqwest client so its all the same session
         KucoinInterface {
             config: Arc::new(configuration.configuration),
             creds: Arc::new(configuration.credentials),
@@ -195,7 +191,7 @@ impl KucoinInterface {
     pub async fn request(
         &self,
         endpoint: &str,
-        json: Option<String>, //Option<KucoinRequestOrderPost>,
+        json: Option<KucoinRequestOrderPost>,
         method: KucoinRequestType,
     ) -> Option<KucoinResponseL1> {
         let since_the_epoch = SystemTime::now() // this is wrong // TODO: need to convert to UTC
@@ -213,10 +209,17 @@ impl KucoinInterface {
             KucoinRequestType::WebsocketToken => "POST",
         };
 
-        let payload_str = match json {
-            Some(data) => format!("{}{}{}{}", &since_the_epoch, method_str, endpoint, data),
+        let payload_str = match json.clone() {
+            Some(data) => format!(
+                "{}{}{}{}",
+                &since_the_epoch,
+                method_str,
+                endpoint,
+                serde_json::to_string(&data).unwrap()
+            ),
             None => format!("{}{}{}", &since_the_epoch, method_str, endpoint),
         };
+        println!("{}", payload_str);
         let mut payload = signed_secret.clone();
         payload.update(payload_str.as_bytes());
         let payload_hmac = payload.finalize();
@@ -229,63 +232,44 @@ impl KucoinInterface {
         let b64_signed_passphrase: String =
             BASE64.encode(&format!("{:x}", passphrase_hmac.into_bytes()).into_bytes());
 
-        // Get headers
-
         let base_url: &str = match self.config.enviroment {
             KucoinEnviroment::Live => "api.kucoin.com",
             KucoinEnviroment::Sandbox => "openapi-sandbox.kucoin.com",
         };
-        let url: Url = Url::parse(&format!("https://{}{}", base_url, endpoint))
-            .expect("Was unable to join the endpoint and base_url");
+        let url: Url = Url::parse(&format!("https://{}{}", base_url, endpoint)).unwrap();
 
-        let client = match method {
+        let mut client = match method {
             KucoinRequestType::Post => self.client.post(url),
             KucoinRequestType::Get => self.client.get(url),
             KucoinRequestType::WebsocketToken => self.client.post(url),
             KucoinRequestType::OrderPost => self.client.post(url),
         };
-        let client = client
-            .header(CONTENT_TYPE, "application/json")
-            .header(
-                HeaderName::from_static("kc-api-key-version"),
-                HeaderValue::from_str(&self.creds.api_key_version).unwrap(),
-            )
-            .header(
-                HeaderName::from_static("kc-api-passphrase"),
-                HeaderValue::from_str(&b64_signed_passphrase).unwrap(),
-            )
-            .header(
-                HeaderName::from_static("kc-api-timestamp"),
-                HeaderValue::from_str(&since_the_epoch).unwrap(),
-            )
-            .header(
-                HeaderName::from_static("kc-api-sign"),
-                HeaderValue::from_str(&b64_signed_payload).unwrap(),
-            )
-            .header(
-                HeaderName::from_static("kc-api-key"),
-                HeaderValue::from_str(&self.creds.api_key).unwrap(),
-            );
-        let client = client.body(payload_str);
-        self.response(
-            client
-                .send()
-                .await
-                .expect("failed to post reqwest")
-                .text()
-                .await
-                .expect("failed to get payload"),
-        )
-    }
 
-    fn response(&self, response: String) -> Option<KucoinResponseL1> {
-        println!("{}", response);
-        // TODO: maybe parse the status code here and panic with better errors
-        let l1: KucoinResponseL0 = serde_json::from_str(&response).unwrap();
-        if l1.code != 200000 {
-            panic!("Recived Bad Response Status from Kucoin:\n\n{:?}", l1);
+        // Get headers
+        client = client
+            .header("kc-api-key", &self.creds.api_key)
+            .header("kc-api-sign", &b64_signed_payload)
+            .header("kc-api-timestamp", &since_the_epoch)
+            .header("kc-api-passphrase", &b64_signed_passphrase)
+            .header("kc-api-key-version", &self.creds.api_key_version)
+            .header("charset", "utf-8");
+
+        println!("{:?}", client);
+
+        client = match json.clone() {
+            Some(data) => client.json(&data.clone()),
+            None => client,
+        };
+
+        let response = client.send().await.unwrap();
+        if response.status().is_success() {
+            serde_json::from_str(&response.text().await.unwrap()).unwrap()
         } else {
-            Some(l1.data)
+            panic!(
+                "status {}, error: {}",
+                response.status(),
+                response.text().await.unwrap()
+            )
         }
     }
 

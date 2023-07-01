@@ -266,26 +266,26 @@ pub async fn execute_trades(
         for order in msg {
             let json_order = match order.side {
                 ArbOrd::Buy(pair1, pair2) => KucoinRequestOrderPost {
-                    timeInForce: "FOK".to_string(),
+                    time_in_force: "FOK".to_string(),
                     size: order.size,
                     price: order.price,
                     symbol: format!("{}-{}", pair1, pair2),
                     side: "buy".to_string(),
-                    clientOid: rng.gen(),
+                    client_o_id: rng.gen(),
                 },
                 ArbOrd::Sell(pair1, pair2) => KucoinRequestOrderPost {
-                    timeInForce: "FOK".to_string(),
+                    time_in_force: "FOK".to_string(),
                     size: order.size,
                     price: order.price,
                     symbol: format!("{}-{}", pair1, pair2),
                     side: "sell".to_string(),
-                    clientOid: rng.gen(),
+                    client_o_id: rng.gen(),
                 },
             };
             println!("{:?}", json_order);
             let kucoin_response = kucoin_interface.request(
                 "api/v1/orders",
-                Some(serde_json::to_string(&json_order).expect("Failed to Serialize")),
+                Some(json_order),
                 KucoinRequestType::OrderPost,
             );
             println!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
