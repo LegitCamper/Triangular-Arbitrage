@@ -1,17 +1,12 @@
 # Triangular-Arbitrage
+
 Attempting Triangular Arbitrage
 
-Time spent so far: 
-[![wakatime](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage.svg)](https://wakatime.com/badge/github/LegitCamper/Triangular-Arbitrage) Not accurate since I have switched to Helix,
-and Helix does not support plugins quite yet
+# Where is it at?
 
-# Instructions (Linux Only)
-- Download the latest release and unzip it
-- `chmod +x run.sh && ./run.sh`
-
-# Does it make money?
-- Well it can, just not consistently
-- I need to find ways to make it faster (Maybe even use a faster language)
+well this project did used to work on Kucoin, but since it no longer supports kyc for US customers, i've had to move to Binance.us.
+It seems that arbitrages are much less common on Binance, and Binance does not support ktc which made calculating fees much easier. 
+I think this project is dead :(
 
 # License
 
