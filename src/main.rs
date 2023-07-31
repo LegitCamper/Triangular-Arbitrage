@@ -1,57 +1,57 @@
-use std::sync::Arc;
-use tokio::{runtime::Builder, sync::mpsc};
+use log::info;
+use simple_logger::SimpleLogger;
+use std::{collections::HashMap, sync::Arc};
+use tokio::{
+    signal,
+    sync::{mpsc, Mutex},
+    task::{self, JoinHandle},
+    time::{interval, Duration},
+};
 
-mod kucoin;
-use kucoin::*;
+mod func;
+mod interface;
+use interface::BinanceInterface;
+mod websocket;
 
 #[tokio::main]
 async fn main() {
-    let kucoin_interface = Arc::new(KucoinInterface::new());
-
-    let Some(data) = kucoin_interface.get_account().await else { panic! ("Unable to Retrive Token data from Kucoin") };
-    println!("{:?}", data);
-
-    // Retreive temporary websocket token
-    let Some(websocket_info) = kucoin_interface.get_websocket_info().await else { panic! ("Unable to Retrive Token data from Kucoin") };
-
-    // Get all coin info
-    let Some(pair_info) = kucoin_interface.get_pairs().await else { panic!("Unable to Retrive Coin data from Kucoin") };
-
-    // Gets valid pair combinations
-    let pair_combinations = create_valid_pairs_catalog(pair_info).await;
-    println!("Generated Valid Coin Pairs successfully");
-
-    // build runtime - ensure tasks are being allocated their own thread
-    let runtime = Builder::new_multi_thread()
-        // .worker_threads(4)
-        .enable_all()
-        .thread_name("arbitrage-calculator")
-        .build()
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .with_colors(true)
+        .init()
         .unwrap();
 
-    let (websocket_writer, websocket_reader) = mpsc::channel(100); // mpsc channel for websocket and validator
-    let (validator_writer, validator_reader) = mpsc::channel(1); // channel to execute order
+    info!("Starting Binance Tri-Trader Cli");
 
-    let websocket_task = runtime.spawn(async move {
-        kucoin_websocket(websocket_info, websocket_writer).await
-        //  websocket_token.unwrap(), // downloads websocket data and passes it through channel to validator
+    let interface = BinanceInterface::new();
+
+    let symbols = interface.get_symbols().await.unwrap();
+    let pairs = interface.get_pairs().await.unwrap();
+
+    let pair_combinations = func::create_valid_pairs_catalog(pairs).await;
+    let orderbook = interface.starter_orderbook(&symbols).await;
+    let (ord_handle, ord_sort_handle) =
+        websocket::start_websocket(orderbook.clone(), &symbols).await;
+
+    let (validator_writer, validator_reader) = mpsc::unbounded_channel(); // channel to execute order
+    let mut interval = interval(Duration::from_millis(100)); //TODO: experiment with this
+    let validator_task = task::spawn(async move {
+        func::find_triangular_arbitrage(&pair_combinations, validator_writer, orderbook.clone())
+            .await;
     });
 
-    let validator_task = runtime.spawn(async move {
-        find_triangular_arbitrage(
-            &pair_combinations,
-            // coin_fees,
-            websocket_reader,
-            validator_writer,
-        )
-        .await;
-    });
+    // let ordering_task =
+    //     task::spawn(async move { execute_trades(binance_interface, validator_reader).await });
 
-    let ordering_task =
-        runtime.spawn(async move { execute_trades(kucoin_interface, validator_reader).await }); //execute_trades(kucoin_interface,
-
-    // await tasks
-    websocket_task.await.unwrap();
-    validator_task.await.unwrap();
-    ordering_task.await.unwrap();
+    tokio::select! {
+        _ = signal::ctrl_c() => {}
+    }
+    ord_handle.abort();
+    for handle in ord_sort_handle.iter() {
+        handle.abort()
+    }
+    // websocket_task.abort();
+    // validator_task.abort();
+    // ordering_task.abort();
+    println!("Exiting - Bye!");
 }
