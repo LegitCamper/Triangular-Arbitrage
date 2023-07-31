@@ -1,11 +1,9 @@
 use log::info;
 use simple_logger::SimpleLogger;
-use std::{collections::HashMap, sync::Arc};
+
 use tokio::{
     signal,
-    sync::{mpsc, Mutex},
-    task::{self, JoinHandle},
-    time::{interval, Duration},
+    sync::{mpsc},
 };
 
 mod func;
@@ -33,12 +31,10 @@ async fn main() {
     let (ord_handle, ord_sort_handle) =
         websocket::start_websocket(orderbook.clone(), &symbols).await;
 
-    let (validator_writer, validator_reader) = mpsc::unbounded_channel(); // channel to execute order
-    let mut interval = interval(Duration::from_millis(100)); //TODO: experiment with this
-    let validator_task = task::spawn(async move {
-        func::find_triangular_arbitrage(&pair_combinations, validator_writer, orderbook.clone())
+    let (validator_writer, _validator_reader) = mpsc::unbounded_channel(); // channel to execute order
+    let validator_task =
+        func::find_triangular_arbitrage(pair_combinations, validator_writer, orderbook.clone())
             .await;
-    });
 
     // let ordering_task =
     //     task::spawn(async move { execute_trades(binance_interface, validator_reader).await });
@@ -50,8 +46,7 @@ async fn main() {
     for handle in ord_sort_handle.iter() {
         handle.abort()
     }
-    // websocket_task.abort();
-    // validator_task.abort();
+    validator_task.abort();
     // ordering_task.abort();
     println!("Exiting - Bye!");
 }

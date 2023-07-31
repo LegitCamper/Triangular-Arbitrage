@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::interface;
+
 
 pub async fn start_websocket(
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
@@ -31,7 +31,6 @@ pub async fn start_websocket(
             symbol.to_string(),
         ));
     }
-
     let orderbook_sort_handle = tokio::spawn(async move {
         loop {
             if let Some((symbol, data)) = tx.recv().await {
@@ -49,7 +48,7 @@ pub async fn start_websocket(
                     }
                 }
             } else {
-                warn!("oderbook channel error")
+                error!("orderbook websocket channel None");
             }
         }
     });

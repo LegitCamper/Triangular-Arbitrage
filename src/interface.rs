@@ -1,12 +1,12 @@
 use binance::account::*;
 use binance::api::*;
-use binance::config::Config;
-use binance::general;
+
+
 use binance::general::*;
 use binance::market::*;
-use binance::rest_model::Symbol;
-use binance::rest_model::{OrderBook, OrderSide, OrderType, SymbolPrice, TimeInForce};
-use log::{error, info};
+
+use binance::rest_model::{OrderBook};
+
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
