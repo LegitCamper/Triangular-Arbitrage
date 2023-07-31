@@ -14,8 +14,6 @@ use tokio::{
     task::JoinHandle,
 };
 
-
-
 pub async fn start_websocket(
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
     symbols: &Vec<String>,
@@ -67,7 +65,7 @@ fn sort_bids(mut vector: Vec<Bids>) -> Vec<Bids> {
         // No swap means array is sorted.
         swapped = false;
         for i in 1..vector.len() {
-            if vector[i - 1].price > vector[i].price {
+            if vector[i - 1].price < vector[i].price {
                 vector.swap(i - 1, i);
                 swapped = true
             }
