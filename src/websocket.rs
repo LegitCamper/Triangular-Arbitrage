@@ -181,7 +181,6 @@ async fn user_stream_websocket(mut orders: UnboundedReceiver<Box<OrderUpdate>>) 
             while let Some(i) = orders.recv().await {
                 info!("Received orders: {:?}", i)
             }
-
             if let Err(e) = web_socket.event_loop(&keep_running).await {
                 println!("Error: {e}");
             }
