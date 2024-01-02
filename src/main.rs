@@ -1,10 +1,7 @@
 use log::info;
 use simple_logger::SimpleLogger;
 
-use tokio::{
-    signal,
-    sync::{mpsc},
-};
+use tokio::{signal, sync::mpsc};
 
 mod func;
 mod interface;
@@ -29,7 +26,7 @@ async fn main() {
     let pair_combinations = func::create_valid_pairs_catalog(pairs).await;
     let orderbook = interface.starter_orderbook(&symbols).await;
     let (ord_handle, ord_sort_handle) =
-        websocket::start_websocket(orderbook.clone(), &symbols).await;
+        websocket::start_websockets(orderbook.clone(), &symbols).await;
 
     let (validator_writer, _validator_reader) = mpsc::unbounded_channel(); // channel to execute order
     let validator_task =
@@ -37,7 +34,7 @@ async fn main() {
             .await;
 
     // let ordering_task =
-    //     task::spawn(async move { execute_trades(binance_interface, validator_reader).await });
+    // task::spawn(async move { execute_trades(binance_interface, validator_reader).await });
 
     tokio::select! {
         _ = signal::ctrl_c() => {}

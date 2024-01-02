@@ -1,11 +1,16 @@
+use binance::api::*;
 use binance::rest_model::{Asks, Bids, OrderBook};
+use binance::userstream::*;
 use binance::websockets::*;
-use binance::ws_model::{CombinedStreamEvent, WebsocketEventUntag};
+use binance::ws_model::{CombinedStreamEvent, WebsocketEvent, WebsocketEventUntag};
 use log::{error, info, warn};
+use serde::Deserialize;
 use std::{
     collections::HashMap,
+    fs::File,
     sync::{atomic::AtomicBool, Arc},
 };
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::{
     sync::{
         mpsc::{unbounded_channel, UnboundedSender},
@@ -14,24 +19,24 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub async fn start_websocket(
+pub async fn start_websockets(
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
     symbols: &Vec<String>,
 ) -> (JoinHandle<()>, Vec<JoinHandle<()>>) {
-    let (rx, mut tx) = unbounded_channel();
+    let (tx, mut rx) = unbounded_channel();
 
     let mut orderbook_handles = Vec::new();
     for stream in symbols.iter() {
         let symbol = stream.split("@").next().unwrap();
         orderbook_handles.push(multiple_orderbook(
-            rx.clone(),
+            tx.clone(),
             vec![stream.to_string()],
             symbol.to_string(),
         ));
     }
     let orderbook_sort_handle = tokio::spawn(async move {
         loop {
-            if let Some((symbol, data)) = tx.recv().await {
+            if let Some((symbol, data)) = rx.recv().await {
                 let mut orderbook = orderbook.lock().await;
 
                 match orderbook.get(&symbol) {
@@ -50,6 +55,9 @@ pub async fn start_websocket(
             }
         }
     });
+
+    let (tx, mut rx) = unbounded_channel();
+    user_stream_websocket(rx);
 
     (orderbook_sort_handle, orderbook_handles)
 }
@@ -98,7 +106,7 @@ fn multiple_orderbook(
 
         let streams: Vec<String> = streams
             .into_iter()
-            .map(|symbol| partial_book_depth_stream(symbol.as_str(), 5, 1000))
+            .map(|symbol| partial_book_depth_stream(symbol.as_str(), 20, 100))
             .collect();
 
         let mut web_socket: WebSockets<'_, CombinedStreamEvent<_>> =
@@ -127,5 +135,53 @@ fn multiple_orderbook(
         }
         web_socket.disconnect().await.unwrap();
         info!("{symbol:?} Websocket Disconnected");
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct Key {
+    key: String,
+}
+
+fn read_key() -> String {
+    let mut file = File::open("key.json").expect("Could not read the json file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Could not deserialize the file, error");
+    serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
+}
+
+#[allow(dead_code)]
+async fn user_stream_websocket(orders: UnboundedReceiver) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let keep_running = AtomicBool::new(true); // Used to control the event loop
+        let api_key_user = Some(read_key().into());
+        let user_stream: UserStream = Binance::new(api_key_user, None);
+
+        if let Ok(answer) = user_stream.start().await {
+            let listen_key = answer.listen_key;
+
+            let mut web_socket: WebSockets<'_, WebsocketEvent> =
+                WebSockets::new(|event: WebsocketEvent| {
+                    if let WebsocketEvent::OrderUpdate(trade) = event {
+                        println!(
+                            "Symbol: {}, Side: {:?}, Price: {}, Execution Type: {:?}",
+                            trade.symbol, trade.side, trade.price, trade.execution_type
+                        );
+                    };
+
+                    Ok(())
+                });
+
+            web_socket.connect(&listen_key).await.unwrap(); // check error
+            if let Err(e) = web_socket.event_loop(&keep_running).await {
+                println!("Error: {e}");
+            }
+            user_stream.close(&listen_key).await.unwrap();
+            web_socket.disconnect().await.unwrap();
+            println!("Userstrem closed and disconnected");
+        } else {
+            println!("Not able to start an User Stream (Check your API_KEY)");
+        }
     })
 }

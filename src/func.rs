@@ -178,18 +178,16 @@ pub async fn find_triangular_arbitrage(
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
-    // skipping caluculation for fees - assuming KCS fees are enabled
-    warn!("skipping caluculation for fees - assuming KCS fees are enabled");
 
-    let mut interval = interval(Duration::from_millis(100)); //TODO: experiment with this
-    task::spawn(async move {
+    task::spawn_blocking(async move {
+        let mut interval = interval(Duration::from_millis(50));
         loop {
             interval.tick().await;
 
             for pairs_tuple in valid_coin_pairs.iter() {
                 let (pairs, pairs_split) = pairs_tuple;
 
-                // loop through data and chekc for arbs
+                // loop through data and check for arbs
                 let orderbook = orderbook.lock().await;
                 if orderbook.get(&pairs[0]).is_some()
                     && orderbook.get(&pairs[1]).is_some()
@@ -215,23 +213,29 @@ pub async fn find_triangular_arbitrage(
                         - STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
                         info!("Profit: {profit}");
-                        // let mut orders = vec![];
-                        // for side in orders_order {
-                        // TODO: Need to implement Rounding with math.round(#, #'s place)
-                        // match side {
-                        // ArbOrd::Buy(ref p1, ref p2) => orders.push(OrderStruct {
-                        //     side: side.clone(),
-                        //     price: orderbook.get(&format!("{}-{}", &p1, &p2)).unwrap().bestAsk,
-                        //     size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
-                        // }),
-                        // ArbOrd::Sell(ref p1, ref p2) => orders.push(OrderStruct {
-                        //     side: side.clone(),
-                        //     price: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bestBid,
-                        //     size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
-                        // }),
-                        // }
-                        // }
-                        // info!("{:?}", pairs_tuple);
+                        let mut orders = vec![];
+                        for side in orders_order {
+                            // TODO: Need to implement Rounding with math.round(#, #'s place)
+                            match side {
+                                ArbOrd::Buy(ref p1, ref p2) => orders.push(OrderStruct {
+                                    side: side.clone(),
+                                    price: orderbook
+                                        .get(&format!("{}-{}", &p1, &p2))
+                                        .unwrap()
+                                        .bestAsk,
+                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
+                                }),
+                                ArbOrd::Sell(ref p1, ref p2) => orders.push(OrderStruct {
+                                    side: side.clone(),
+                                    price: orderbook
+                                        .get(&format!("{}-{}", p1, p2))
+                                        .unwrap()
+                                        .bestBid,
+                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
+                                }),
+                            }
+                        }
+                        info!("{:?}", pairs_tuple);
                         // validator_writer.send(orders).await.unwrap();
                     }
                 }
@@ -239,47 +243,3 @@ pub async fn find_triangular_arbitrage(
         }
     })
 }
-
-// // #[derive(Debug, Serialize)]
-// // struct OrderResponse {
-// //     order_id: f64,
-// // }
-
-// pub async fn execute_trades(
-//     kucoin_interface: Arc<KucoinInterface>,
-//     mut validator_reader: mpsc::Receiver<Vec<OrderStruct>>,
-// ) {
-//     trace!("Execute Trades");
-//     let mut rng = ::rand::rngs::StdRng::from_seed(rand::rngs::OsRng.gen());
-
-//     while let Some(msg) = validator_reader.recv().await {
-//         // Iterates through each order in msg
-//         for order in msg {
-//             let json_order = match order.side {
-//                 ArbOrd::Buy(pair1, pair2) => KucoinRequestOrderPost {
-//                     time_in_force: "FOK".to_string(),
-//                     size: order.size,
-//                     price: order.price,
-//                     symbol: format!("{}-{}", pair1, pair2),
-//                     side: "buy".to_string(),
-//                     client_o_id: rng.gen(),
-//                 },
-//                 ArbOrd::Sell(pair1, pair2) => KucoinRequestOrderPost {
-//                     time_in_force: "FOK".to_string(),
-//                     size: order.size,
-//                     price: order.price,
-//                     symbol: format!("{}-{}", pair1, pair2),
-//                     side: "sell".to_string(),
-//                     client_o_id: rng.gen(),
-//                 },
-//             };
-//             info!("{:?}", json_order);
-//             let kucoin_response = kucoin_interface.request(
-//                 "api/v1/orders",
-//                 Some(json_order),
-//                 KucoinRequestType::OrderPost,
-//             );
-//             info!("Order Response: {:?}", kucoin_response.await); // TODO: Remove this
-//         }
-//     }
-// }
