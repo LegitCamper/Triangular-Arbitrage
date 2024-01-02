@@ -2,12 +2,13 @@ use binance::api::*;
 use binance::rest_model::{Asks, Bids, OrderBook};
 use binance::userstream::*;
 use binance::websockets::*;
-use binance::ws_model::{CombinedStreamEvent, WebsocketEvent, WebsocketEventUntag};
+use binance::ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag};
 use log::{error, info, warn};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs::File,
+    io::Read,
     sync::{atomic::AtomicBool, Arc},
 };
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -56,8 +57,8 @@ pub async fn start_websockets(
         }
     });
 
-    let (tx, mut rx) = unbounded_channel();
-    user_stream_websocket(rx);
+    let (tx, rx) = unbounded_channel::<Box<OrderUpdate>>();
+    user_stream_websocket(rx).await;
 
     (orderbook_sort_handle, orderbook_handles)
 }
@@ -152,7 +153,7 @@ fn read_key() -> String {
 }
 
 #[allow(dead_code)]
-async fn user_stream_websocket(orders: UnboundedReceiver) -> JoinHandle<()> {
+async fn user_stream_websocket(mut orders: UnboundedReceiver<Box<OrderUpdate>>) -> JoinHandle<()> {
     tokio::spawn(async move {
         let keep_running = AtomicBool::new(true); // Used to control the event loop
         let api_key_user = Some(read_key().into());
@@ -168,12 +169,18 @@ async fn user_stream_websocket(orders: UnboundedReceiver) -> JoinHandle<()> {
                             "Symbol: {}, Side: {:?}, Price: {}, Execution Type: {:?}",
                             trade.symbol, trade.side, trade.price, trade.execution_type
                         );
+                        // orders.send(trade).expect("Failed to send trade")
                     };
 
                     Ok(())
                 });
 
             web_socket.connect(&listen_key).await.unwrap(); // check error
+
+            // listens for orders and passes them to the user websocket
+            while let Some(i) = orders.recv().await {
+                info!("Received orders: {:?}", i)
+            }
             if let Err(e) = web_socket.event_loop(&keep_running).await {
                 println!("Error: {e}");
             }

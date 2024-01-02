@@ -179,7 +179,7 @@ pub async fn find_triangular_arbitrage(
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
 
-    task::spawn_blocking(async move {
+    task::spawn(async move {
         let mut interval = interval(Duration::from_millis(50));
         loop {
             interval.tick().await;
@@ -217,21 +217,27 @@ pub async fn find_triangular_arbitrage(
                         for side in orders_order {
                             // TODO: Need to implement Rounding with math.round(#, #'s place)
                             match side {
-                                ArbOrd::Buy(ref p1, ref p2) => orders.push(OrderStruct {
-                                    side: side.clone(),
-                                    price: orderbook
-                                        .get(&format!("{}-{}", &p1, &p2))
-                                        .unwrap()
-                                        .bestAsk,
-                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
-                                }),
+                                ArbOrd::Buy(ref p1, ref p2) => {
+                                    // warn!("Error, {:?}, ", orderbook);
+                                    orders.push(OrderStruct {
+                                        side: side.clone(),
+                                        price: orderbook
+                                            .get(&format!("{}{}", &p1, &p2))
+                                            .unwrap()
+                                            .asks[0]
+                                            .price,
+                                        size: orderbook.get(&format!("{}{}", p1, p2)).unwrap().asks
+                                            [0]
+                                        .qty,
+                                    })
+                                }
                                 ArbOrd::Sell(ref p1, ref p2) => orders.push(OrderStruct {
                                     side: side.clone(),
-                                    price: orderbook
-                                        .get(&format!("{}-{}", p1, p2))
-                                        .unwrap()
-                                        .bestBid,
-                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().size,
+                                    price: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids
+                                        [0]
+                                    .price,
+                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0]
+                                        .qty,
                                 }),
                             }
                         }
