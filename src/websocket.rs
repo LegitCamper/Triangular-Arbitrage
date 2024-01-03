@@ -2,13 +2,10 @@ use binance::api::*;
 use binance::rest_model::{Asks, Bids, OrderBook};
 use binance::userstream::*;
 use binance::websockets::*;
-use binance::ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag};
+use binance::ws_model::{CombinedStreamEvent, WebsocketEvent, WebsocketEventUntag};
 use log::{error, info, warn};
-use serde::Deserialize;
 use std::{
     collections::HashMap,
-    fs::File,
-    io::Read,
     sync::{atomic::AtomicBool, Arc},
 };
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -20,7 +17,9 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub async fn start_websockets(
+use crate::func::{self, OrderStruct};
+
+pub async fn start_market_websockets(
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
     symbols: &Vec<String>,
 ) -> (JoinHandle<()>, Vec<JoinHandle<()>>) {
@@ -57,10 +56,16 @@ pub async fn start_websockets(
         }
     });
 
-    let (tx, rx) = unbounded_channel::<Box<OrderUpdate>>();
-    user_stream_websocket(rx).await;
-
     (orderbook_sort_handle, orderbook_handles)
+}
+
+pub async fn start_user_websocket(
+    key: func::Key,
+) -> (JoinHandle<()>, UnboundedSender<OrderStruct>) {
+    let (tx, rx) = unbounded_channel::<func::OrderStruct>();
+    let user_handle = user_stream_websocket(key, rx).await;
+
+    (user_handle, tx)
 }
 
 fn sort_by_price(mut orderbook: OrderBook) -> OrderBook {
@@ -139,25 +144,14 @@ fn multiple_orderbook(
     })
 }
 
-#[derive(Debug, Deserialize)]
-struct Key {
-    key: String,
-}
-
-fn read_key() -> String {
-    let mut file = File::open("key.json").expect("Could not read the json file");
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .expect("Could not deserialize the file, error");
-    serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
-}
-
 #[allow(dead_code)]
-async fn user_stream_websocket(mut orders: UnboundedReceiver<Box<OrderUpdate>>) -> JoinHandle<()> {
+async fn user_stream_websocket(
+    key: func::Key,
+    mut orders: UnboundedReceiver<func::OrderStruct>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         let keep_running = AtomicBool::new(true); // Used to control the event loop
-        let api_key_user = Some(read_key().into());
-        let user_stream: UserStream = Binance::new(api_key_user, None);
+        let user_stream: UserStream = Binance::new(Some(key.key), Some(key.secret));
 
         if let Ok(answer) = user_stream.start().await {
             let listen_key = answer.listen_key;

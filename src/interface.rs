@@ -9,6 +9,7 @@ use binance::rest_model::OrderBook;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
+#[allow(dead_code)]
 pub struct BinanceInterface {
     general: General,
     market: Market,

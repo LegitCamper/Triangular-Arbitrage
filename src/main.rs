@@ -1,10 +1,14 @@
 use log::info;
 use simple_logger::SimpleLogger;
 
-use tokio::{signal, sync::mpsc};
+use tokio::signal;
+
+use func::{create_valid_pairs_catalog, find_triangular_arbitrage, read_key};
+use websocket::{start_market_websockets, start_user_websocket};
 
 mod func;
 mod interface;
+mod tests;
 use interface::BinanceInterface;
 mod websocket;
 
@@ -23,18 +27,12 @@ async fn main() {
     let symbols = interface.get_symbols().await.unwrap();
     let pairs = interface.get_pairs().await.unwrap();
 
-    let pair_combinations = func::create_valid_pairs_catalog(pairs).await;
+    let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let orderbook = interface.starter_orderbook(&symbols).await;
-    let (ord_handle, ord_sort_handle) =
-        websocket::start_websockets(orderbook.clone(), &symbols).await;
-
-    let (validator_writer, _validator_reader) = mpsc::unbounded_channel(); // channel to execute order
+    let (ord_handle, ord_sort_handle) = start_market_websockets(orderbook.clone(), &symbols).await;
+    let (user_handle, user_channel) = start_user_websocket(read_key()).await;
     let validator_task =
-        func::find_triangular_arbitrage(pair_combinations, validator_writer, orderbook.clone())
-            .await;
-
-    // let ordering_task =
-    // task::spawn(async move { execute_trades(binance_interface, validator_reader).await });
+        find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
 
     tokio::select! {
         _ = signal::ctrl_c() => {}
@@ -44,6 +42,7 @@ async fn main() {
         handle.abort()
     }
     validator_task.abort();
+    user_handle.abort();
     // ordering_task.abort();
     println!("Exiting - Bye!");
 }

@@ -1,7 +1,7 @@
 use binance::rest_model::OrderBook;
-use log::{info, trace, warn};
-
-use std::{collections::HashMap, sync::Arc};
+use log::{info, trace};
+use serde::Deserialize;
+use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
     sync::{mpsc, Mutex},
     task::{self, JoinHandle},
@@ -165,6 +165,7 @@ fn calculate_profitablity(
     coin_amount
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OrderStruct {
     side: ArbOrd,
@@ -174,7 +175,7 @@ pub struct OrderStruct {
 
 pub async fn find_triangular_arbitrage(
     valid_coin_pairs: Vec<([String; 3], [String; 6])>,
-    _validator_writer: mpsc::UnboundedSender<OrderStruct>,
+    validator_writer: mpsc::UnboundedSender<OrderStruct>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
@@ -184,68 +185,86 @@ pub async fn find_triangular_arbitrage(
         loop {
             interval.tick().await;
 
-            for pairs_tuple in valid_coin_pairs.iter() {
+            'inner: for pairs_tuple in valid_coin_pairs.iter() {
                 let (pairs, pairs_split) = pairs_tuple;
 
                 // loop through data and check for arbs
-                let orderbook = orderbook.lock().await;
-                if orderbook.get(&pairs[0]).is_some()
-                    && orderbook.get(&pairs[1]).is_some()
-                    && orderbook.get(&pairs[2]).is_some()
-                {
-                    if orderbook.get(&pairs[0]).unwrap().bids.is_empty()
-                        || orderbook.get(&pairs[0]).unwrap().asks.is_empty()
-                        || orderbook.get(&pairs[1]).unwrap().bids.is_empty()
-                        || orderbook.get(&pairs[1]).unwrap().asks.is_empty()
-                        || orderbook.get(&pairs[2]).unwrap().bids.is_empty()
-                        || orderbook.get(&pairs[2]).unwrap().asks.is_empty()
+                if let Some((pair0, pair1, pair2)) = clone_orderbook(pairs, &orderbook).await {
+                    if pair0.bids.is_empty()
+                        || pair0.asks.is_empty()
+                        || pair1.bids.is_empty()
+                        || pair1.asks.is_empty()
+                        || pair2.bids.is_empty()
+                        || pair2.asks.is_empty()
                     {
-                        continue;
+                        continue 'inner;
                     };
-
                     let orders_order = find_order_order(pairs_split.to_vec());
-
-                    let pair1 = orderbook.get(&pairs[0]).cloned().unwrap();
-                    let pair2 = orderbook.get(&pairs[1]).cloned().unwrap();
-                    let pair3 = orderbook.get(&pairs[2]).cloned().unwrap();
-
-                    let profit = calculate_profitablity(&orders_order, [pair1, pair2, pair3])
-                        - STARTING_AMOUNT;
+                    let profit = calculate_profitablity(
+                        &orders_order,
+                        [pair0.clone(), pair1.clone(), pair2.clone()],
+                    ) - STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
-                        info!("Profit: {profit}");
-                        let mut orders = vec![];
-                        for side in orders_order {
-                            // TODO: Need to implement Rounding with math.round(#, #'s place)
-                            match side {
-                                ArbOrd::Buy(ref p1, ref p2) => {
-                                    // warn!("Error, {:?}, ", orderbook);
-                                    orders.push(OrderStruct {
-                                        side: side.clone(),
-                                        price: orderbook
-                                            .get(&format!("{}{}", &p1, &p2))
-                                            .unwrap()
-                                            .asks[0]
-                                            .price,
-                                        size: orderbook.get(&format!("{}{}", p1, p2)).unwrap().asks
-                                            [0]
-                                        .qty,
-                                    })
-                                }
-                                ArbOrd::Sell(ref p1, ref p2) => orders.push(OrderStruct {
-                                    side: side.clone(),
-                                    price: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids
-                                        [0]
-                                    .price,
-                                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0]
-                                        .qty,
-                                }),
-                            }
-                        }
-                        info!("{:?}", pairs_tuple);
-                        // validator_writer.send(orders).await.unwrap();
+                        info!("Profit: {profit}, pairs: {:?}", pairs_tuple);
+                        // create_order(orderbook, orders_order, &validator_writer).await;
                     }
                 }
             }
         }
     })
+}
+
+async fn clone_orderbook(
+    pairs: &[String; 3],
+    orderbook: &Arc<Mutex<HashMap<String, OrderBook>>>,
+) -> Option<(OrderBook, OrderBook, OrderBook)> {
+    let orderbook = orderbook.lock().await;
+    Some((
+        orderbook.get(&pairs[0])?.clone(),
+        orderbook.get(&pairs[1])?.clone(),
+        orderbook.get(&pairs[2])?.clone(),
+    ))
+}
+
+async fn create_order(
+    orderbook: HashMap<String, OrderBook>,
+    orders_order: Vec<ArbOrd>,
+    _validator_writer: &mpsc::UnboundedSender<OrderStruct>,
+) {
+    let mut orders = vec![];
+    for side in orders_order {
+        match side {
+            ArbOrd::Buy(ref p1, ref p2) => {
+                // warn!("Error, {:?}, ", orderbook);
+                orders.push(OrderStruct {
+                    side: side.clone(),
+                    price: orderbook.get(&format!("{}{}", &p1, &p2)).unwrap().asks[0].price,
+                    size: orderbook.get(&format!("{}{}", p1, p2)).unwrap().asks[0].qty,
+                })
+            }
+            ArbOrd::Sell(ref p1, ref p2) => {
+                // warn!("Error, {:?}, ", orderbook);
+                orders.push(OrderStruct {
+                    side: side.clone(),
+                    price: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0].price,
+                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0].qty,
+                })
+            }
+        }
+    }
+    // validator_writer.send(orders).await.unwrap();
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Key {
+    pub key: String,
+    pub secret: String,
+}
+
+pub fn read_key() -> Key {
+    let mut file = File::open("key.json").expect("Could not read the json file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Could not deserialize the file, error");
+    serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
 }
