@@ -1,7 +1,6 @@
 use binance::rest_model::OrderBook;
 use itertools::Itertools;
 use log::{info, trace, warn};
-use rayon::prelude::*;
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
@@ -27,34 +26,55 @@ fn is_stable(symbol: &(String, String)) -> bool {
 pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[String; 6]> {
     trace!("Create Valid Pairs Catalog");
 
-    symbols
-        .iter()
-        .combinations_with_replacement(3)
-        .par_bridge()
-        .map(|p| (p[0], p[1], p[2]))
-        .filter(|(p1, p2, p3)| {
-            [&p1.0, &p1.1, &p2.0, &p2.1, &p3.0, &p3.1]
-                .iter()
-                .unique()
-                .count()
-                == 3
-        })
-        .filter(|(p1, _, p3)| is_stable(p1) && is_stable(p3))
-        .filter(|(p1, p2, _)| {
-            p1.0 == p2.0 && p1.1 != p2.1
-                || p1.1 == p2.1 && p1.0 != p2.0
-                || p1.1 == p2.0 && p1.0 != p2.1
-                || p1.0 == p2.1 && p1.1 != p2.0
-        })
-        .filter(|(_, p2, p3)| {
-            p3.0 == p2.0 && p3.1 != p2.1
-                || p3.1 == p2.1 && p3.0 != p2.0
-                || p3.1 == p2.0 && p3.0 != p2.1
-                || p3.0 == p2.1 && p3.1 != p2.0
-        })
-        .map(|(p1, p2, p3)| (p1.clone(), p2.clone(), p3.clone()))
-        .map(|(p1, p2, p3)| [p1.0, p1.1, p2.0, p2.1, p3.0, p3.1])
-        .collect()
+    let mut output_list: Vec<[String; 6]> = Vec::new();
+
+    for pair1 in symbols.iter() {
+        if !is_stable(pair1) {
+            continue;
+        };
+        for pair2 in symbols.iter() {
+            if pair2 == pair1 || is_stable(pair2) {
+                continue;
+            };
+            if pair2.0 != pair1.0 && pair2.0 != pair1.1 && pair2.1 != pair1.0 && pair2.1 != pair1.1
+            {
+                continue;
+            };
+            for pair3 in symbols.iter() {
+                if pair3 == pair2 || pair3 == pair1 || !is_stable(pair3) {
+                    continue;
+                }
+                if pair3.0 != pair2.0
+                    && pair3.0 != pair2.1
+                    && pair3.1 != pair2.0
+                    && pair3.1 != pair2.1
+                {
+                    continue;
+                }
+
+                let valid_pair = [
+                    pair1.0.to_string(),
+                    pair1.1.to_string(),
+                    pair2.0.to_string(),
+                    pair2.1.to_string(),
+                    pair3.0.to_string(),
+                    pair3.1.to_string(),
+                ];
+
+                // adding check to ensure there are only two of every symbol - Last check
+                if [&pair1.0, &pair1.1, &pair2.0, &pair2.1, &pair3.0, &pair3.1]
+                    .iter()
+                    .unique()
+                    .count()
+                    == 3
+                {
+                    output_list.push(valid_pair);
+                }
+            }
+        }
+    }
+    info!("Generated Valid Coin Pairs successfully");
+    output_list
 }
 
 #[allow(dead_code)]
@@ -129,7 +149,6 @@ fn calculate_profitablity(
         ArbOrd::Buy(_, _) => coin_amount / coin_storage[2].asks[0].price,
         ArbOrd::Sell(_, _) => coin_amount * coin_storage[2].bids[0].price,
     };
-    info!("Profit {:?}", coin_amount);
     coin_amount
 }
 
@@ -155,9 +174,9 @@ pub async fn find_triangular_arbitrage(
 
             'inner: for split_pairs in valid_coin_pairs.iter() {
                 let pairs = [
-                    format!("{}-{}", split_pairs[0], split_pairs[1]),
-                    format!("{}-{}", split_pairs[2], split_pairs[3]),
-                    format!("{}-{}", split_pairs[4], split_pairs[5]),
+                    format!("{}{}", split_pairs[0], split_pairs[1]),
+                    format!("{}{}", split_pairs[2], split_pairs[3]),
+                    format!("{}{}", split_pairs[4], split_pairs[5]),
                 ];
 
                 // loop through data and check for arbs
@@ -182,7 +201,7 @@ pub async fn find_triangular_arbitrage(
                         create_order((pair0, pair1, pair2), orders, &validator_writer).await;
                     }
                 } else {
-                    // warn!("None in orderbook");
+                    // warn!("None in orderbook for: {:?}", split_pairs);
                 }
             }
         }

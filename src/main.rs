@@ -28,6 +28,7 @@ async fn main() {
 
     let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let orderbook = interface.starter_orderbook(&symbols).await;
+
     let (ord_handle, ord_sort_handle) = start_market_websockets(orderbook.clone(), &symbols).await;
     let (user_handle, user_channel) = start_user_websocket(read_key()).await;
     let validator_task =

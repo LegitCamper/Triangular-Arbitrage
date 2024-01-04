@@ -38,6 +38,7 @@ pub async fn start_market_websockets(
         loop {
             if let Some((symbol, data)) = rx.recv().await {
                 let mut orderbook = orderbook.lock().await;
+                // info!("Symbol: {:?},Data: {:?}", symbol, data);
 
                 match orderbook.get(&symbol) {
                     Some(old_data) => {
@@ -50,7 +51,6 @@ pub async fn start_market_websockets(
                     None => {
                         warn!("Symbol does not exist in orderbook");
                         orderbook.insert(symbol, data).unwrap();
-                        ()
                     }
                 }
             } else {
@@ -115,7 +115,7 @@ fn multiple_orderbook(
 
         let streams: Vec<String> = streams
             .into_iter()
-            .map(|symbol| partial_book_depth_stream(symbol.as_str(), 20, 100))
+            .map(|symbol| partial_book_depth_stream(symbol.to_lowercase().as_str(), 20, 100))
             .collect();
 
         let mut web_socket: WebSockets<'_, CombinedStreamEvent<_>> =
@@ -125,7 +125,6 @@ fn multiple_orderbook(
                         warn!("Combined Orderbook Issue: {:?}", we)
                     }
                     WebsocketEventUntag::Orderbook(data) => {
-                        info!("Data: {:?}", data);
                         channel.send((symbol.clone(), *data)).unwrap()
                     }
                     WebsocketEventUntag::BookTicker(bt) => {
