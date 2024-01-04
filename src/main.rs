@@ -31,8 +31,8 @@ async fn main() {
     let orderbook = interface.starter_orderbook(&symbols).await;
     let (ord_handle, ord_sort_handle) = start_market_websockets(orderbook.clone(), &symbols).await;
     let (user_handle, user_channel) = start_user_websocket(read_key()).await;
-    // let validator_task =
-    // find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
+    let _validator_task =
+        find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
 
     tokio::select! {
         _ = signal::ctrl_c() => {}

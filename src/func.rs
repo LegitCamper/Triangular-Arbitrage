@@ -57,6 +57,7 @@ pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[
         .collect()
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum ArbOrd {
     Buy(String, String), // pair1, pair2
@@ -64,7 +65,7 @@ enum ArbOrd {
 }
 
 // TODO: should calulate this during catalog build in the future to prevent wasted IO
-fn find_order_order(coin_pair: Vec<String>) -> Vec<ArbOrd> {
+fn find_order_order(coin_pair: &[String; 6]) -> Vec<ArbOrd> {
     let mut order: Vec<ArbOrd> = vec![];
 
     // get first order
@@ -112,8 +113,8 @@ fn calculate_profitablity(
     order: &[ArbOrd],
     coin_storage: [OrderBook; 3],
 ) -> f64 {
-    // transaction 1
     let mut coin_amount: f64;
+    // transaction 1
     coin_amount = match &order[0] {
         ArbOrd::Buy(_, _) => STARTING_AMOUNT / coin_storage[0].asks[0].price,
         ArbOrd::Sell(_, _) => STARTING_AMOUNT * coin_storage[0].bids[0].price,
@@ -140,7 +141,7 @@ pub struct OrderStruct {
 }
 
 pub async fn find_triangular_arbitrage(
-    valid_coin_pairs: Vec<([String; 3], [String; 6])>,
+    valid_coin_pairs: Vec<[String; 6]>,
     validator_writer: mpsc::UnboundedSender<OrderStruct>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
 ) -> JoinHandle<()> {
@@ -151,11 +152,15 @@ pub async fn find_triangular_arbitrage(
         loop {
             interval.tick().await;
 
-            'inner: for pairs_tuple in valid_coin_pairs.iter() {
-                let (pairs, pairs_split) = pairs_tuple;
+            'inner: for split_pairs in valid_coin_pairs.iter() {
+                let pairs = [
+                    format!("{}-{}", split_pairs[0], split_pairs[1]),
+                    format!("{}-{}", split_pairs[2], split_pairs[3]),
+                    format!("{}-{}", split_pairs[4], split_pairs[5]),
+                ];
 
                 // loop through data and check for arbs
-                if let Some((pair0, pair1, pair2)) = clone_orderbook(pairs, &orderbook).await {
+                if let Some((pair0, pair1, pair2)) = clone_orderbook(&pairs, &orderbook).await {
                     if pair0.bids.is_empty()
                         || pair0.asks.is_empty()
                         || pair1.bids.is_empty()
@@ -165,14 +170,14 @@ pub async fn find_triangular_arbitrage(
                     {
                         continue 'inner;
                     };
-                    let orders_order = find_order_order(pairs_split.to_vec());
+                    let orders = find_order_order(split_pairs);
                     let profit = calculate_profitablity(
-                        &orders_order,
+                        &orders,
                         [pair0.clone(), pair1.clone(), pair2.clone()],
                     ) - STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
-                        info!("Profit: {profit}, pairs: {:?}", pairs_tuple);
-                        // create_order(orderbook, orders_order, &validator_writer).await;
+                        info!("Profit: {profit}, pairs: {:?}", split_pairs);
+                        create_order((pair0, pair1, pair2), orders, &validator_writer).await;
                     }
                 }
             }
@@ -193,31 +198,36 @@ async fn clone_orderbook(
 }
 
 async fn create_order(
-    orderbook: HashMap<String, OrderBook>,
+    local_orderbook: (OrderBook, OrderBook, OrderBook),
     orders_order: Vec<ArbOrd>,
     _validator_writer: &mpsc::UnboundedSender<OrderStruct>,
 ) {
     let mut orders = vec![];
-    for side in orders_order {
+
+    for (pair, side) in vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
+        .iter()
+        .zip(orders_order.iter())
+    {
         match side {
-            ArbOrd::Buy(ref p1, ref p2) => {
+            ArbOrd::Buy(_, _) => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
                     side: side.clone(),
-                    price: orderbook.get(&format!("{}{}", &p1, &p2)).unwrap().asks[0].price,
-                    size: orderbook.get(&format!("{}{}", p1, p2)).unwrap().asks[0].qty,
+                    price: pair.asks[0].price,
+                    size: pair.asks[0].qty,
                 })
             }
-            ArbOrd::Sell(ref p1, ref p2) => {
+            ArbOrd::Sell(_, _) => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
                     side: side.clone(),
-                    price: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0].price,
-                    size: orderbook.get(&format!("{}-{}", p1, p2)).unwrap().bids[0].qty,
+                    price: pair.bids[0].price,
+                    size: pair.bids[0].qty,
                 })
             }
         }
     }
+    info!("Orders: {:?}", orders);
     // validator_writer.send(orders).await.unwrap();
 }
 
