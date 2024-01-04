@@ -1,6 +1,5 @@
-use log::info;
+use log::{info, LevelFilter::Info};
 use simple_logger::SimpleLogger;
-
 use tokio::signal;
 
 use func::{create_valid_pairs_catalog, find_triangular_arbitrage, read_key};
@@ -15,7 +14,7 @@ mod websocket;
 #[tokio::main]
 async fn main() {
     SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
+        .with_level(Info)
         .with_colors(true)
         .init()
         .unwrap();
@@ -31,9 +30,10 @@ async fn main() {
     let orderbook = interface.starter_orderbook(&symbols).await;
     let (ord_handle, ord_sort_handle) = start_market_websockets(orderbook.clone(), &symbols).await;
     let (user_handle, user_channel) = start_user_websocket(read_key()).await;
-    let _validator_task =
+    let validator_task =
         find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
 
+    // Handle closing
     tokio::select! {
         _ = signal::ctrl_c() => {}
     }
@@ -41,7 +41,7 @@ async fn main() {
     for handle in ord_sort_handle.iter() {
         handle.abort()
     }
-    // validator_task.abort();
+    validator_task.abort();
     user_handle.abort();
     // ordering_task.abort();
     println!("Exiting - Bye!");

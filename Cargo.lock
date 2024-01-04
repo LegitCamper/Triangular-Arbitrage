@@ -33,6 +33,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrage"
+version = "0.1.0"
+dependencies = [
+ "binance-rs-async",
+ "itertools",
+ "log",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "simple_logger",
+ "tokio",
+ "tokio-tungstenite 0.20.1",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -625,22 +641,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cee9c64da59eae3b50095c18d3e74f8b73c0b86d2792824ff01bbce68ba229ca"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kucoin-arbitrage"
-version = "0.1.0"
-dependencies = [
- "binance-rs-async",
- "itertools",
- "log",
- "rand",
- "rayon",
- "serde",
- "serde_json",
- "simple_logger",
- "tokio",
- "tokio-tungstenite 0.20.1",
 ]
 
 [[package]]

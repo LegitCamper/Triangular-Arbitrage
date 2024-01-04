@@ -43,9 +43,12 @@ pub async fn start_market_websockets(
                     Some(old_data) => {
                         if old_data.last_update_id < data.last_update_id {
                             orderbook.insert(symbol, sort_by_price(data)).unwrap();
+                        } else {
+                            warn!("New data is not newer than old data");
                         }
                     }
                     None => {
+                        warn!("Symbol does not exist in orderbook");
                         orderbook.insert(symbol, data).unwrap();
                         ()
                     }
@@ -122,6 +125,7 @@ fn multiple_orderbook(
                         warn!("Combined Orderbook Issue: {:?}", we)
                     }
                     WebsocketEventUntag::Orderbook(data) => {
+                        info!("Data: {:?}", data);
                         channel.send((symbol.clone(), *data)).unwrap()
                     }
                     WebsocketEventUntag::BookTicker(bt) => {
@@ -144,7 +148,6 @@ fn multiple_orderbook(
     })
 }
 
-#[allow(dead_code)]
 async fn user_stream_websocket(
     key: func::Key,
     mut orders: UnboundedReceiver<func::OrderStruct>,
@@ -159,7 +162,7 @@ async fn user_stream_websocket(
             let mut web_socket: WebSockets<'_, WebsocketEvent> =
                 WebSockets::new(|event: WebsocketEvent| {
                     if let WebsocketEvent::OrderUpdate(trade) = event {
-                        println!(
+                        info!(
                             "Symbol: {}, Side: {:?}, Price: {}, Execution Type: {:?}",
                             trade.symbol, trade.side, trade.price, trade.execution_type
                         );

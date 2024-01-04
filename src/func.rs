@@ -1,6 +1,6 @@
 use binance::rest_model::OrderBook;
 use itertools::Itertools;
-use log::{info, trace};
+use log::{info, trace, warn};
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
@@ -13,7 +13,7 @@ use tokio::{
 // // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 const STARTING_AMOUNT: f64 = 50.0; // Staring amount in USD
-const MINIMUN_PROFIT: f64 = 0.1; // in USD
+const MINIMUN_PROFIT: f64 = 0.001; // in USD
 
 fn is_stable(symbol: &(String, String)) -> bool {
     for stable_symbol in STABLE_COINS {
@@ -129,6 +129,7 @@ fn calculate_profitablity(
         ArbOrd::Buy(_, _) => coin_amount / coin_storage[2].asks[0].price,
         ArbOrd::Sell(_, _) => coin_amount * coin_storage[2].bids[0].price,
     };
+    info!("Profit {:?}", coin_amount);
     coin_amount
 }
 
@@ -168,6 +169,7 @@ pub async fn find_triangular_arbitrage(
                         || pair2.bids.is_empty()
                         || pair2.asks.is_empty()
                     {
+                        warn!("A pair was empty");
                         continue 'inner;
                     };
                     let orders = find_order_order(split_pairs);
@@ -179,6 +181,8 @@ pub async fn find_triangular_arbitrage(
                         info!("Profit: {profit}, pairs: {:?}", split_pairs);
                         create_order((pair0, pair1, pair2), orders, &validator_writer).await;
                     }
+                } else {
+                    // warn!("None in orderbook");
                 }
             }
         }
