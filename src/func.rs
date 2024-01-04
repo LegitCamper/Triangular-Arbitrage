@@ -1,5 +1,7 @@
 use binance::rest_model::OrderBook;
+use itertools::Itertools;
 use log::{info, trace};
+use rayon::prelude::*;
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
@@ -22,73 +24,37 @@ fn is_stable(symbol: &(String, String)) -> bool {
     false
 }
 
-pub async fn create_valid_pairs_catalog(
-    symbols: Vec<(String, String)>,
-) -> Vec<([String; 3], [String; 6])> {
+pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[String; 6]> {
     trace!("Create Valid Pairs Catalog");
-    let mut output_list: Vec<([String; 3], [String; 6])> = Vec::new();
 
-    for pair1 in symbols.iter() {
-        if !is_stable(pair1) {
-            continue;
-        };
-        for pair2 in symbols.iter() {
-            if pair2 == pair1 || is_stable(pair2) {
-                continue;
-            };
-            if pair2.0 != pair1.0 && pair2.0 != pair1.1 && pair2.1 != pair1.0 && pair2.1 != pair1.1
-            {
-                continue;
-            };
-            for pair3 in symbols.iter() {
-                if pair3 == pair2 || pair3 == pair1 || !is_stable(pair3) {
-                    continue;
-                }
-                if pair3.0 != pair2.0
-                    && pair3.0 != pair2.1
-                    && pair3.1 != pair2.0
-                    && pair3.1 != pair2.1
-                {
-                    continue;
-                }
-
-                let valid_pair = (
-                    [
-                        format!("{}{}", pair1.0, pair1.1),
-                        format!("{}{}", pair2.0, pair2.1),
-                        format!("{}{}", pair3.0, pair3.1),
-                    ],
-                    [
-                        pair1.0.to_string(),
-                        pair1.1.to_string(),
-                        pair2.0.to_string(),
-                        pair2.1.to_string(),
-                        pair3.0.to_string(),
-                        pair3.1.to_string(),
-                    ],
-                );
-
-                // adding check to ensure there are only two of every symbol - Last check
-                let mut equal_symbols = true;
-                let mut pair_count = HashMap::new();
-                for pair in valid_pair.1.iter() {
-                    let count = pair_count.entry(pair).or_insert(0);
-                    *count += 1;
-                }
-                for value in pair_count.values() {
-                    if value != &2 {
-                        equal_symbols = false;
-                    }
-                }
-
-                if equal_symbols {
-                    output_list.push(valid_pair);
-                }
-            }
-        }
-    }
-    info!("Generated Valid Coin Pairs successfully");
-    output_list
+    symbols
+        .iter()
+        .combinations_with_replacement(3)
+        .par_bridge()
+        .map(|p| (p[0], p[1], p[2]))
+        .filter(|(p1, p2, p3)| {
+            [&p1.0, &p1.1, &p2.0, &p2.1, &p3.0, &p3.1]
+                .iter()
+                .unique()
+                .count()
+                == 3
+        })
+        .filter(|(p1, _, p3)| is_stable(p1) && is_stable(p3))
+        .filter(|(p1, p2, _)| {
+            p1.0 == p2.0 && p1.1 != p2.1
+                || p1.1 == p2.1 && p1.0 != p2.0
+                || p1.1 == p2.0 && p1.0 != p2.1
+                || p1.0 == p2.1 && p1.1 != p2.0
+        })
+        .filter(|(_, p2, p3)| {
+            p3.0 == p2.0 && p3.1 != p2.1
+                || p3.1 == p2.1 && p3.0 != p2.0
+                || p3.1 == p2.0 && p3.0 != p2.1
+                || p3.0 == p2.1 && p3.1 != p2.0
+        })
+        .map(|(p1, p2, p3)| (p1.clone(), p2.clone(), p3.clone()))
+        .map(|(p1, p2, p3)| [p1.0, p1.1, p2.0, p2.1, p3.0, p3.1])
+        .collect()
 }
 
 #[derive(Debug, Clone)]

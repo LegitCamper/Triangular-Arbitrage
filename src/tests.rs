@@ -7,6 +7,6 @@ mod tests {
     #[tokio::test]
     async fn test_create_valid_pairs_catalog() {
         let pairs = BinanceInterface::new().get_pairs().await.unwrap();
-        create_valid_pairs_catalog(pairs).await;
+        panic!("{:?}", create_valid_pairs_catalog(pairs).await.len());
     }
 }
