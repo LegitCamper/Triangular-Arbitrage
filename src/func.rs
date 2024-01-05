@@ -1,6 +1,6 @@
 use binance::rest_model::OrderBook;
 use itertools::Itertools;
-use log::{info, trace, warn};
+use log::{info, trace};
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
@@ -178,6 +178,7 @@ pub async fn find_triangular_arbitrage(
                     format!("{}{}", split_pairs[2], split_pairs[3]),
                     format!("{}{}", split_pairs[4], split_pairs[5]),
                 ];
+                // info!("Got: {:?}", pairs);
 
                 // loop through data and check for arbs
                 if let Some((pair0, pair1, pair2)) = clone_orderbook(&pairs, &orderbook).await {
@@ -188,7 +189,7 @@ pub async fn find_triangular_arbitrage(
                         || pair2.bids.is_empty()
                         || pair2.asks.is_empty()
                     {
-                        warn!("A pair was empty");
+                        // warn!("A pair was empty");
                         continue 'inner;
                     };
                     let orders = find_order_order(split_pairs);

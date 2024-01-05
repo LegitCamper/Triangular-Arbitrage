@@ -38,7 +38,7 @@ pub async fn start_market_websockets(
         loop {
             if let Some((symbol, data)) = rx.recv().await {
                 let mut orderbook = orderbook.lock().await;
-                // info!("Symbol: {:?},Data: {:?}", symbol, data);
+                // info!("Adding Symbol: {:?}", symbol);
 
                 match orderbook.get(&symbol) {
                     Some(old_data) => {
