@@ -127,28 +127,29 @@ fn find_order_order(coin_pair: &[String; 6]) -> Vec<ArbOrd> {
     order
 }
 
-// TODO: This assumes they are selling more than I am buying
-fn calculate_profitablity(
-    //This also returns price and size
-    order: &[ArbOrd],
-    coin_storage: [OrderBook; 3],
-) -> f64 {
-    let mut coin_amount: f64;
-    // transaction 1
-    coin_amount = match &order[0] {
-        ArbOrd::Buy(_, _) => STARTING_AMOUNT / coin_storage[0].asks[0].price,
-        ArbOrd::Sell(_, _) => STARTING_AMOUNT * coin_storage[0].bids[0].price,
-    };
-    // Transaction 2
-    coin_amount = match &order[1] {
-        ArbOrd::Buy(_, _) => coin_amount / coin_storage[1].asks[0].price,
-        ArbOrd::Sell(_, _) => coin_amount * coin_storage[1].bids[0].price,
-    };
-    // Transaction 3
-    coin_amount = match &order[2] {
-        ArbOrd::Buy(_, _) => coin_amount / coin_storage[2].asks[0].price,
-        ArbOrd::Sell(_, _) => coin_amount * coin_storage[2].bids[0].price,
-    };
+// TODO: this assumes all stable coins are pegged at us dollar
+fn calculate_profitablity(order: &[ArbOrd], coin_storage: [OrderBook; 3]) -> f64 {
+    let mut coin_amount = 0.0;
+    for pair in coin_storage.into_iter() {
+        coin_amount = match &order[0] {
+            ArbOrd::Buy(_, _) => {
+                let amnt = STARTING_AMOUNT / pair.asks[0].price;
+                if amnt > pair.asks[0].qty {
+                    return 0.0;
+                } else {
+                    amnt
+                }
+            }
+            ArbOrd::Sell(_, _) => {
+                let amnt = STARTING_AMOUNT * pair.bids[0].price;
+                if amnt > pair.bids[0].qty {
+                    return 0.0;
+                } else {
+                    amnt
+                }
+            }
+        }
+    }
     coin_amount
 }
 
