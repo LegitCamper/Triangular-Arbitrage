@@ -64,8 +64,8 @@ pub async fn start_market_websockets(
 
 pub async fn start_user_websocket(
     key: func::Key,
-) -> (JoinHandle<()>, UnboundedSender<OrderStruct>) {
-    let (tx, rx) = unbounded_channel::<func::OrderStruct>();
+) -> (JoinHandle<()>, UnboundedSender<Vec<OrderStruct>>) {
+    let (tx, rx) = unbounded_channel::<Vec<func::OrderStruct>>();
     let user_handle = user_stream_websocket(key, rx).await;
 
     (user_handle, tx)
@@ -149,7 +149,7 @@ fn multiple_orderbook(
 
 async fn user_stream_websocket(
     key: func::Key,
-    mut orders: UnboundedReceiver<func::OrderStruct>,
+    mut orders: UnboundedReceiver<Vec<func::OrderStruct>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let keep_running = AtomicBool::new(true); // Used to control the event loop

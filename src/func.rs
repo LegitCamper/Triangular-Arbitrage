@@ -163,13 +163,13 @@ pub struct OrderStruct {
 
 pub async fn find_triangular_arbitrage(
     valid_coin_pairs: Vec<[String; 6]>,
-    validator_writer: mpsc::UnboundedSender<OrderStruct>,
+    validator_writer: mpsc::UnboundedSender<Vec<OrderStruct>>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
 
     task::spawn(async move {
-        let mut interval = interval(Duration::from_millis(50));
+        let mut interval = interval(Duration::from_millis(10)); // TODO: this may need to be decreased
         loop {
             interval.tick().await;
 
@@ -199,8 +199,12 @@ pub async fn find_triangular_arbitrage(
                         [pair0.clone(), pair1.clone(), pair2.clone()],
                     ) - STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
-                        info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        create_order((pair0, pair1, pair2), orders, &validator_writer).await;
+                        // info!("Profit: {profit}, pairs: {:?}", split_pairs);
+                        let orders = create_order((pair0, pair1, pair2), orders).await;
+
+                        // removing price that led to order
+                        remove_bought(&orderbook, split_pairs, &orders).await;
+                        validator_writer.send(orders).unwrap();
                     }
                 } else {
                     // warn!("None in orderbook for: {:?}", split_pairs);
@@ -208,6 +212,29 @@ pub async fn find_triangular_arbitrage(
             }
         }
     })
+}
+
+async fn remove_bought(
+    orderbook: &Arc<Mutex<HashMap<String, OrderBook>>>,
+    split_pairs: &[String; 6],
+    orders: &Vec<OrderStruct>,
+) {
+    let mut orderbook = orderbook.lock().await;
+    for (n, pairs) in split_pairs.windows(2).enumerate() {
+        let pair = orderbook
+            .get_mut(&format!("{}{}", &pairs[0], &pairs[1]))
+            .unwrap();
+        match orders[n].side {
+            ArbOrd::Buy(_, _) => {
+                pair.asks.remove(0);
+                ()
+            }
+            ArbOrd::Sell(_, _) => {
+                pair.bids.remove(0);
+                ()
+            }
+        }
+    }
 }
 
 async fn clone_orderbook(
@@ -225,8 +252,7 @@ async fn clone_orderbook(
 async fn create_order(
     local_orderbook: (OrderBook, OrderBook, OrderBook),
     orders_order: Vec<ArbOrd>,
-    _validator_writer: &mpsc::UnboundedSender<OrderStruct>,
-) {
+) -> Vec<OrderStruct> {
     let mut orders = vec![];
 
     for (pair, side) in vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
@@ -252,8 +278,8 @@ async fn create_order(
             }
         }
     }
-    info!("Orders: {:?}", orders);
-    // validator_writer.send(orders).await.unwrap();
+    // info!("Orders: {:?}", orders);
+    orders
 }
 
 #[derive(Debug, Deserialize)]
