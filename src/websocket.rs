@@ -1,5 +1,7 @@
+use binance::account::*;
 use binance::api::*;
 use binance::rest_model::{Asks, Bids, OrderBook};
+use binance::rest_model::{OrderSide, OrderType, TimeInForce};
 use binance::userstream::*;
 use binance::websockets::*;
 use binance::ws_model::{CombinedStreamEvent, WebsocketEvent, WebsocketEventUntag};
@@ -7,6 +9,7 @@ use log::{error, info, warn};
 use std::{
     collections::HashMap,
     sync::{atomic::AtomicBool, Arc},
+    time::Duration,
 };
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::{
@@ -15,6 +18,7 @@ use tokio::{
         Mutex,
     },
     task::JoinHandle,
+    time::sleep,
 };
 
 use crate::func::{self, OrderStruct};
@@ -153,7 +157,8 @@ async fn user_stream_websocket(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let keep_running = AtomicBool::new(true); // Used to control the event loop
-        let user_stream: UserStream = Binance::new(Some(key.key), Some(key.secret));
+        let user_stream: UserStream = Binance::new(Some(key.key.clone()), Some(key.secret.clone()));
+        let account: Account = Binance::new(Some(key.key), Some(key.secret));
 
         if let Ok(answer) = user_stream.start().await {
             let listen_key = answer.listen_key;
@@ -167,15 +172,52 @@ async fn user_stream_websocket(
                         );
                         // orders.send(trade).expect("Failed to send trade")
                     };
-
                     Ok(())
                 });
 
             web_socket.connect(&listen_key).await.unwrap(); // check error
 
             // listens for orders and passes them to the user websocket
-            while let Some(i) = orders.recv().await {
-                info!("Received orders: {:?}", i)
+            if let Some(orders) = orders.recv().await {
+                info!("Received orders: {:?}", orders);
+                // TODO: catch errors and reverse orders that fail in 2/3 or 3/3
+                for order in orders.iter() {
+                    let symbol = order.symbol.clone();
+                    match order.side {
+                        func::ArbOrd::Buy(_, _) => {
+                            let limit_buy = OrderRequest {
+                                symbol: symbol.to_string(),
+                                quantity: Some(order.size),
+                                price: Some(order.price),
+                                order_type: OrderType::Limit,
+                                side: OrderSide::Buy,
+                                time_in_force: Some(TimeInForce::FOK),
+                                ..OrderRequest::default()
+                            };
+                            match account.place_order(limit_buy).await {
+                                Ok(answer) => info!("{:?}", answer),
+                                Err(e) => error!("Error: {e}"),
+                            }
+                        }
+                        func::ArbOrd::Sell(_, _) => {
+                            let limit_sell = OrderRequest {
+                                symbol: symbol.to_string(),
+                                quantity: Some(order.size),
+                                price: Some(order.price),
+                                order_type: OrderType::Limit,
+                                side: OrderSide::Sell,
+                                time_in_force: Some(TimeInForce::FOK),
+                                ..OrderRequest::default()
+                            };
+                            match account.place_order(limit_sell).await {
+                                Ok(answer) => info!("{:?}", answer),
+                                Err(e) => error!("Error: {e}"),
+                            }
+                        }
+                    }
+                }
+                // sleep to ensure order goes through once at a time
+                sleep(Duration::from_secs(10)).await;
             }
             if let Err(e) = web_socket.event_loop(&keep_running).await {
                 println!("Error: {e}");

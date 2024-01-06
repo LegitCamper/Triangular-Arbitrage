@@ -79,7 +79,7 @@ pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-enum ArbOrd {
+pub enum ArbOrd {
     Buy(String, String), // pair1, pair2
     Sell(String, String),
 }
@@ -154,11 +154,12 @@ fn calculate_profitablity(order: &[ArbOrd], coin_storage: [OrderBook; 3]) -> f64
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OrderStruct {
-    side: ArbOrd,
-    price: f64,
-    size: f64,
+    pub symbol: String,
+    pub side: ArbOrd,
+    pub price: f64,
+    pub size: f64,
 }
 
 pub async fn find_triangular_arbitrage(
@@ -200,10 +201,10 @@ pub async fn find_triangular_arbitrage(
                     ) - STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
                         // info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        let orders = create_order((pair0, pair1, pair2), orders).await;
+                        let orders = create_order(&pairs, (pair0, pair1, pair2), orders).await;
 
                         // removing price that led to order
-                        remove_bought(&orderbook, split_pairs, &orders).await;
+                        remove_bought(&orderbook, &pairs, &orders).await;
                         validator_writer.send(orders).unwrap();
                     }
                 } else {
@@ -216,14 +217,12 @@ pub async fn find_triangular_arbitrage(
 
 async fn remove_bought(
     orderbook: &Arc<Mutex<HashMap<String, OrderBook>>>,
-    split_pairs: &[String; 6],
+    pairs: &[String; 3],
     orders: &Vec<OrderStruct>,
 ) {
     let mut orderbook = orderbook.lock().await;
-    for (n, pairs) in split_pairs.windows(2).enumerate() {
-        let pair = orderbook
-            .get_mut(&format!("{}{}", &pairs[0], &pairs[1]))
-            .unwrap();
+    for (n, pair) in pairs.iter().enumerate() {
+        let pair = orderbook.get_mut(pair).unwrap();
         match orders[n].side {
             ArbOrd::Buy(_, _) => {
                 pair.asks.remove(0);
@@ -250,30 +249,34 @@ async fn clone_orderbook(
 }
 
 async fn create_order(
+    pairs: &[String; 3],
     local_orderbook: (OrderBook, OrderBook, OrderBook),
     orders_order: Vec<ArbOrd>,
 ) -> Vec<OrderStruct> {
     let mut orders = vec![];
 
-    for (pair, side) in vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
+    for ((pair_data, pair), side) in vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
         .iter()
+        .zip(pairs.iter())
         .zip(orders_order.iter())
     {
         match side {
             ArbOrd::Buy(_, _) => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
+                    symbol: pair.clone(),
                     side: side.clone(),
-                    price: pair.asks[0].price,
-                    size: pair.asks[0].qty,
+                    price: pair_data.asks[0].price,
+                    size: pair_data.asks[0].qty,
                 })
             }
             ArbOrd::Sell(_, _) => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
+                    symbol: pair.clone(),
                     side: side.clone(),
-                    price: pair.bids[0].price,
-                    size: pair.bids[0].qty,
+                    price: pair_data.bids[0].price,
+                    size: pair_data.bids[0].qty,
                 })
             }
         }
