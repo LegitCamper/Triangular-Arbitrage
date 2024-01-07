@@ -13,6 +13,7 @@ use tokio::{
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 const STARTING_AMOUNT: f64 = 50.0; // Staring amount in USD
 const MINIMUN_PROFIT: f64 = 0.001; // in USD
+const MINIMUM_FEE_DECIMAL: f64 = 0.001;
 
 fn is_stable(symbol: &(String, String)) -> bool {
     for stable_symbol in STABLE_COINS {
@@ -80,8 +81,8 @@ pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ArbOrd {
-    Buy(String, String), // pair1, pair2
-    Sell(String, String),
+    Buy,
+    Sell,
 }
 
 // TODO: should calulate this during catalog build in the future to prevent wasted IO
@@ -90,67 +91,53 @@ fn find_order_order(coin_pair: &[String; 6]) -> Vec<ArbOrd> {
 
     // get first order
     if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
-        order.push(ArbOrd::Buy(
-            coin_pair[0].to_owned(),
-            coin_pair[1].to_owned(),
-        ));
+        order.push(ArbOrd::Buy);
     } else if coin_pair[1] == coin_pair[2] || coin_pair[1] == coin_pair[3] {
-        order.push(ArbOrd::Sell(
-            coin_pair[0].to_owned(),
-            coin_pair[1].to_owned(),
-        ));
+        order.push(ArbOrd::Sell);
     }
     // get second order
     if coin_pair[2] == coin_pair[4] || coin_pair[2] == coin_pair[5] {
-        order.push(ArbOrd::Buy(
-            coin_pair[2].to_owned(),
-            coin_pair[3].to_owned(),
-        ));
+        order.push(ArbOrd::Buy);
     } else if coin_pair[3] == coin_pair[4] || coin_pair[3] == coin_pair[5] {
-        order.push(ArbOrd::Sell(
-            coin_pair[2].to_owned(),
-            coin_pair[3].to_owned(),
-        ));
+        order.push(ArbOrd::Sell);
     }
     // get third order
     if coin_pair[4] == coin_pair[0] || coin_pair[4] == coin_pair[1] {
-        order.push(ArbOrd::Buy(
-            coin_pair[4].to_owned(),
-            coin_pair[5].to_owned(),
-        ));
+        order.push(ArbOrd::Buy);
     } else if coin_pair[5] == coin_pair[0] || coin_pair[5] == coin_pair[1] {
-        order.push(ArbOrd::Sell(
-            coin_pair[4].to_owned(),
-            coin_pair[5].to_owned(),
-        ));
+        order.push(ArbOrd::Sell);
     }
     order
 }
 
 // TODO: this assumes all stable coins are pegged at us dollar
-fn calculate_profitablity(order: &[ArbOrd], coin_storage: [OrderBook; 3]) -> f64 {
+fn calculate_profitablity(order: &[ArbOrd], coin_storage: [OrderBook; 3]) -> (f64, f64, f64, f64) {
     let mut coin_amount = 0.0;
+    let mut qty = vec![];
     for pair in coin_storage.into_iter() {
         coin_amount = match &order[0] {
-            ArbOrd::Buy(_, _) => {
+            ArbOrd::Buy => {
                 let amnt = STARTING_AMOUNT / pair.asks[0].price;
+                qty.push(amnt);
                 if amnt > pair.asks[0].qty {
-                    return 0.0;
+                    return (0.0, 0.0, 0.0, 0.0);
                 } else {
                     amnt
                 }
             }
-            ArbOrd::Sell(_, _) => {
+            ArbOrd::Sell => {
                 let amnt = STARTING_AMOUNT * pair.bids[0].price;
+                qty.push(amnt);
                 if amnt > pair.bids[0].qty {
-                    return 0.0;
+                    return (0.0, 0.0, 0.0, 0.0);
                 } else {
                     amnt
                 }
             }
         }
     }
-    coin_amount
+    coin_amount -= coin_amount * (MINIMUM_FEE_DECIMAL * 3.0);
+    (coin_amount, qty[0], qty[1], qty[2])
 }
 
 #[allow(dead_code)]
@@ -195,13 +182,16 @@ pub async fn find_triangular_arbitrage(
                         continue 'inner;
                     };
                     let orders = find_order_order(split_pairs);
-                    let profit = calculate_profitablity(
+                    let (mut profit, qty1, qty2, qty3) = calculate_profitablity(
                         &orders,
                         [pair0.clone(), pair1.clone(), pair2.clone()],
-                    ) - STARTING_AMOUNT;
+                    );
+                    profit -= STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
                         // info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        let orders = create_order(&pairs, (pair0, pair1, pair2), orders).await;
+                        let orders =
+                            create_order(&pairs, (pair0, pair1, pair2), orders, [qty1, qty2, qty3])
+                                .await;
 
                         // removing price that led to order
                         remove_bought(&orderbook, &pairs, &orders).await;
@@ -224,11 +214,11 @@ async fn remove_bought(
     for (n, pair) in pairs.iter().enumerate() {
         let pair = orderbook.get_mut(pair).unwrap();
         match orders[n].side {
-            ArbOrd::Buy(_, _) => {
+            ArbOrd::Buy => {
                 pair.asks.remove(0);
                 ()
             }
-            ArbOrd::Sell(_, _) => {
+            ArbOrd::Sell => {
                 pair.bids.remove(0);
                 ()
             }
@@ -252,31 +242,41 @@ async fn create_order(
     pairs: &[String; 3],
     local_orderbook: (OrderBook, OrderBook, OrderBook),
     orders_order: Vec<ArbOrd>,
+    qtys: [f64; 3],
 ) -> Vec<OrderStruct> {
     let mut orders = vec![];
 
-    for ((pair_data, pair), side) in vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
-        .iter()
-        .zip(pairs.iter())
-        .zip(orders_order.iter())
+    for (c, (((pair_data, pair), side), qty)) in
+        vec![local_orderbook.0, local_orderbook.1, local_orderbook.2]
+            .iter()
+            .zip(pairs.iter())
+            .zip(orders_order.iter())
+            .zip(qtys.iter())
+            .enumerate()
     {
+        // calculate fees
+        let size = if c > 0 {
+            *qty - *qty * MINIMUM_FEE_DECIMAL
+        } else {
+            *qty
+        };
         match side {
-            ArbOrd::Buy(_, _) => {
+            ArbOrd::Buy => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
                     symbol: pair.clone(),
                     side: side.clone(),
                     price: pair_data.asks[0].price,
-                    size: pair_data.asks[0].qty,
+                    size,
                 })
             }
-            ArbOrd::Sell(_, _) => {
+            ArbOrd::Sell => {
                 // warn!("Error, {:?}, ", orderbook);
                 orders.push(OrderStruct {
                     symbol: pair.clone(),
                     side: side.clone(),
                     price: pair_data.bids[0].price,
-                    size: pair_data.bids[0].qty,
+                    size,
                 })
             }
         }
@@ -285,7 +285,7 @@ async fn create_order(
     orders
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Key {
     pub key: String,
     pub secret: String,

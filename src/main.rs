@@ -1,9 +1,15 @@
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    thread::sleep,
+    time,
+};
+
 use log::{info, LevelFilter::Info};
 use simple_logger::SimpleLogger;
 use tokio::signal;
 
 use func::{create_valid_pairs_catalog, find_triangular_arbitrage, read_key};
-use websocket::{start_market_websockets, start_user_websocket};
+use websocket::{start_market_websockets, start_order_placer};
 
 mod func;
 mod interface;
@@ -21,6 +27,8 @@ async fn main() {
 
     info!("Starting Binance Tri-Trader Cli");
 
+    let keep_running = Arc::new(AtomicBool::new(true));
+
     let interface = BinanceInterface::new();
 
     let symbols = interface.get_symbols().await.unwrap();
@@ -29,8 +37,10 @@ async fn main() {
     let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let orderbook = interface.starter_orderbook(&symbols).await;
 
-    let (ord_handle, ord_sort_handle) = start_market_websockets(orderbook.clone(), &symbols).await;
-    let (user_handle, user_channel) = start_user_websocket(read_key()).await;
+    let (ord_handle, ord_sort_handle) =
+        start_market_websockets(keep_running.clone(), orderbook.clone(), &symbols).await;
+    let (user_handle, user_channel, user_websocket_handle) =
+        start_order_placer(keep_running.clone(), read_key()).await;
     let validator_task =
         find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
 
@@ -38,12 +48,15 @@ async fn main() {
     tokio::select! {
         _ = signal::ctrl_c() => {}
     }
+    info!("Closing...");
+    keep_running.store(false, std::sync::atomic::Ordering::Relaxed);
+    sleep(time::Duration::from_secs(5));
     ord_handle.abort();
     for handle in ord_sort_handle.iter() {
         handle.abort()
     }
-    validator_task.abort();
     user_handle.abort();
-    // ordering_task.abort();
-    println!("Exiting - Bye!");
+    user_websocket_handle.abort();
+    validator_task.abort();
+    info!("Exiting - Bye!");
 }
