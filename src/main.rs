@@ -30,19 +30,29 @@ async fn main() {
     let keep_running = Arc::new(AtomicBool::new(true));
 
     let interface = BinanceInterface::new();
-
+    let exchange_info = interface.get_exchange_info().await.unwrap();
+    let server_time = interface.get_server_time().await.unwrap();
     let symbols = interface.get_symbols().await.unwrap();
     let pairs = interface.get_pairs().await.unwrap();
-
-    let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let orderbook = interface.starter_orderbook(&symbols).await;
 
+    let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let (ord_handle, ord_sort_handle) =
         start_market_websockets(keep_running.clone(), orderbook.clone(), &symbols).await;
-    let (user_handle, user_channel, user_websocket_handle) =
-        start_order_placer(keep_running.clone(), read_key()).await;
-    let validator_task =
-        find_triangular_arbitrage(pair_combinations, user_channel, orderbook.clone()).await;
+    let (user_handle, user_channel, user_websocket_handle) = start_order_placer(
+        keep_running.clone(),
+        read_key(),
+        &exchange_info,
+        &server_time,
+    )
+    .await;
+    let validator_task = find_triangular_arbitrage(
+        pair_combinations,
+        user_channel,
+        orderbook.clone(),
+        exchange_info.clone(),
+    )
+    .await;
 
     // Handle closing
     tokio::select! {

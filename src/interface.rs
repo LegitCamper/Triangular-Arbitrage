@@ -4,14 +4,14 @@ use binance::api::*;
 use binance::general::*;
 use binance::market::*;
 
-use binance::rest_model::OrderBook;
+use binance::rest_model::{ExchangeInformation, OrderBook};
 
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 #[allow(dead_code)]
 pub struct BinanceInterface {
-    general: General,
+    pub general: General,
     market: Market,
     account: Account,
 }
@@ -35,6 +35,20 @@ impl BinanceInterface {
         }
 
         Some(symbols)
+    }
+
+    pub async fn get_exchange_info(&self) -> Option<ExchangeInformation> {
+        self.general.exchange_info().await.ok()
+    }
+
+    pub async fn get_server_time(&self) -> Option<i64> {
+        self.general
+            .get_server_time()
+            .await
+            .unwrap()
+            .server_time
+            .try_into()
+            .ok()
     }
 
     pub async fn get_pairs(&self) -> Option<Vec<(String, String)>> {

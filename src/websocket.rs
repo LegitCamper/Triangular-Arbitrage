@@ -1,13 +1,13 @@
 use binance::{
     account::*,
     api::*,
-    general::*,
-    rest_model::{Asks, Bids, ExchangeInformation, OrderBook, OrderSide, OrderType, TimeInForce},
+    rest_model::{
+        Asks, Bids, ExchangeInformation, Filters, OrderBook, OrderSide, OrderType, TimeInForce,
+    },
     userstream::*,
     websockets::*,
     ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag},
 };
-// use binance::userstream::*;
 use chrono::Utc;
 use log::{error, info, warn};
 use std::{
@@ -75,6 +75,8 @@ pub async fn start_market_websockets(
 pub async fn start_order_placer(
     keep_running: Arc<AtomicBool>,
     key: func::Key,
+    exchange_info: &ExchangeInformation,
+    server_time: &i64,
 ) -> (
     JoinHandle<()>,
     UnboundedSender<Vec<OrderStruct>>,
@@ -83,7 +85,15 @@ pub async fn start_order_placer(
     let (tx, rx) = unbounded_channel::<Vec<func::OrderStruct>>();
     let (orders_placed_rx, user_websocket_handle) =
         user_stream(keep_running.clone(), key.clone()).await;
-    let user_handle = place_orders(keep_running.clone(), key, rx, orders_placed_rx).await;
+    let user_handle = place_orders(
+        keep_running.clone(),
+        key,
+        exchange_info.clone(),
+        server_time.clone(),
+        rx,
+        orders_placed_rx,
+    )
+    .await;
 
     (user_handle, tx, user_websocket_handle)
 }
@@ -166,25 +176,28 @@ fn multiple_orderbook(
 async fn place_orders(
     keep_running: Arc<AtomicBool>,
     key: func::Key,
+    exchange_info: ExchangeInformation,
+    server_time: i64,
     mut orders: UnboundedReceiver<Vec<func::OrderStruct>>,
     mut placed_orders: UnboundedReceiver<OrderUpdate>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut account: Account = Binance::new(Some(key.key), Some(key.secret));
-        let general: General = Binance::new(None, None);
-        let exchange_info = general.exchange_info().await.unwrap();
         // fix server_time_diff to be allgined with server time
-        account.server_time_diff = Utc::now().timestamp_millis()
-            + general.get_server_time().await.unwrap().server_time as i64;
+        account.server_time_diff = Utc::now().timestamp_millis() + server_time;
 
         loop {
             let mut created_order = false;
             match orders.try_recv() {
                 Ok(orders) => {
                     info!("Received orders: {:?}", orders);
+                    // check filters in order before executing
+                    // if let Ok(_) = check_filters(&orders, &exchange_info) {
                     for order in orders.iter() {
                         place_order(order, &exchange_info, &account).await;
                         // ensure order has gone through before continuing with following orders
+                        // have a timeout here incase it gets killed and not filled
+                        // TODO: create unwind func to undo all orders with market prices
                         let placed_order = placed_orders
                             .recv()
                             .await
@@ -198,6 +211,7 @@ async fn place_orders(
                             panic!("Order failed to proccess in the correct order or at all");
                         }
                     }
+                    // }
                     // sleep to ensure order batches goes through once at a time
                     // will likely be removed once user websocket works: TODO
                     created_order = true;
@@ -272,6 +286,49 @@ fn get_precision(symbol: &String, exchange_info: &ExchangeInformation) -> Option
         }
     }
     None
+}
+
+fn check_filters(
+    orders: &Vec<func::OrderStruct>,
+    exchange_info: &ExchangeInformation,
+) -> Result<(), ()> {
+    for order in orders.iter() {
+        for exchange_symbol_data in exchange_info.symbols.iter() {
+            let exchange_symbol = &exchange_symbol_data.symbol;
+            if *order.symbol == *exchange_symbol {
+                let filters = &exchange_symbol_data.filters;
+                for filter in filters {
+                    match check_filter(order, filter) {
+                        Ok(_) => (),
+                        Err(_) => return Err(()),
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// TODO: improve this func
+fn check_filter(order: &func::OrderStruct, filter: &Filters) -> Result<(), ()> {
+    info!("Filter: {:?}", filter);
+    match filter {
+        Filters::LotSize {
+            min_qty,
+            max_qty,
+            step_size,
+        } => {
+            if order.size < *min_qty || order.size > *max_qty || order.size % *step_size != 0.0 {
+                warn!("Failed lot size filter check for {}", order.symbol);
+                warn!("{} Requires min of {}", order.symbol, min_qty); // TODO: This can be removed once I find what the max amount I need to own is
+                warn!("{} Requires step size of {}", order.symbol, step_size);
+                return Err(());
+            }
+        }
+        // TODO: add more checks
+        _ => (),
+    }
+    Ok(())
 }
 
 #[allow(dead_code)]

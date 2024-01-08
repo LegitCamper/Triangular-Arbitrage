@@ -1,4 +1,4 @@
-use binance::rest_model::OrderBook;
+use binance::rest_model::{ExchangeInformation, Filters, OrderBook};
 use itertools::Itertools;
 use log::{info, trace};
 use serde::Deserialize;
@@ -13,7 +13,7 @@ use tokio::{
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 const STARTING_AMOUNT: f64 = 50.0; // Staring amount in USD
 const MINIMUN_PROFIT: f64 = 0.001; // in USD
-const MINIMUM_FEE_DECIMAL: f64 = 0.001;
+const MINIMUM_FEE_DECIMAL: f64 = 0.0057;
 
 fn is_stable(symbol: &(String, String)) -> bool {
     for stable_symbol in STABLE_COINS {
@@ -153,6 +153,7 @@ pub async fn find_triangular_arbitrage(
     valid_coin_pairs: Vec<[String; 6]>,
     validator_writer: mpsc::UnboundedSender<Vec<OrderStruct>>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
+    exchange_info: ExchangeInformation,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
 
@@ -189,9 +190,11 @@ pub async fn find_triangular_arbitrage(
                     profit -= STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
                         // info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        let orders =
+                        let mut orders =
                             create_order(&pairs, (pair0, pair1, pair2), orders, [qty1, qty2, qty3])
                                 .await;
+                        // ensure all orders match lot_size limit
+                        adhere_step_size(&exchange_info, &mut orders);
 
                         // removing price that led to order
                         remove_bought(&orderbook, &pairs, &orders).await;
@@ -281,8 +284,40 @@ async fn create_order(
             }
         }
     }
-    // info!("Orders: {:?}", orders);
     orders
+}
+
+fn adhere_step_size(exchange_info: &ExchangeInformation, orders: &mut Vec<OrderStruct>) {
+    for order in orders {
+        for exchange_symbol_data in exchange_info.symbols.iter() {
+            let exchange_symbol = &exchange_symbol_data.symbol;
+            if order.symbol == *exchange_symbol {
+                for filter in &exchange_symbol_data.filters {
+                    if let Filters::LotSize {
+                        min_qty: _,
+                        max_qty: _,
+                        step_size,
+                    } = filter
+                    {
+                        let mut amount = order.size / order.price;
+                        if amount % step_size != 0.0 {
+                            let amount_str = format!("{}", amount);
+                            let amount_len = amount_str.split(".").last().unwrap().len();
+                            let step_size_len =
+                                format!("{}", step_size).split(".").last().unwrap().len();
+
+                            amount = amount_str[0..amount_len
+                                - (amount_len as i64 - step_size_len as i64).abs() as usize]
+                                .parse::<f64>()
+                                .unwrap();
+
+                            order.size = order.price * amount;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
