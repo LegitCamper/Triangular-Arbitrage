@@ -1,4 +1,5 @@
 use std::{
+    process::exit,
     sync::{atomic::AtomicBool, Arc},
     thread::sleep,
     time,
@@ -68,4 +69,5 @@ async fn main() {
     user_websocket_handle.abort();
     validator_task.abort();
     info!("Exiting - Bye!");
+    exit(1);
 }

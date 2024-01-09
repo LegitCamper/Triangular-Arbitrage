@@ -184,12 +184,16 @@ fn calculate_profitablity(
     };
     // Transaction 2
     coin_amount = match &order[1] {
-        ArbOrd::Buy => step_size(
-            exchange_info,
-            &pairs[1],
-            coin_amount,
-            coin_storage[1].asks[0].price,
-        ),
+        ArbOrd::Buy => {
+            let size = step_size(
+                exchange_info,
+                &pairs[1],
+                coin_amount,
+                coin_storage[1].asks[0].price,
+            );
+            qty.push(size);
+            size
+        }
         ArbOrd::Sell => {
             let size = step_size(
                 exchange_info,
@@ -396,13 +400,17 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
                             0
                         };
 
-                        // panic!("{} {} {}", amount_len, step_size_len, )
-                        let mut amount_arr = amount_str.split(".");
+                        let mut amount_arr: Vec<&str> = amount_str.split(".").collect();
+                        if amount_arr.len() == 1 {
+                            amount_arr.push("0")
+                        }
+                        // println!("{}", amount_str);
+                        // println!("{:?}", amount_arr);
                         return price
                             * format!(
                                 "{}.{}",
-                                amount_arr.next().unwrap(),
-                                amount_str[0..step_size_len].to_string()
+                                amount_arr[0],
+                                amount_arr[1][0..step_size_len].to_string()
                             )
                             .parse::<f64>()
                             .unwrap();
