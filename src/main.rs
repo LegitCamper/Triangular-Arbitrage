@@ -1,4 +1,5 @@
 use std::{
+    process::exit,
     sync::{atomic::AtomicBool, Arc},
     thread::sleep,
     time,
@@ -13,7 +14,6 @@ use websocket::{start_market_websockets, start_order_placer};
 
 mod func;
 mod interface;
-mod tests;
 use interface::BinanceInterface;
 mod websocket;
 
@@ -69,4 +69,5 @@ async fn main() {
     user_websocket_handle.abort();
     validator_task.abort();
     info!("Exiting - Bye!");
+    exit(1);
 }

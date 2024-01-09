@@ -79,69 +79,160 @@ pub async fn create_valid_pairs_catalog(symbols: Vec<(String, String)>) -> Vec<[
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum ArbOrd {
     Buy,
     Sell,
 }
 
 // TODO: should calulate this during catalog build in the future to prevent wasted IO
-fn find_order_order(coin_pair: &[String; 6]) -> Vec<ArbOrd> {
-    let mut order: Vec<ArbOrd> = vec![];
-
-    // get first order
-    if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
-        order.push(ArbOrd::Buy);
-    } else if coin_pair[1] == coin_pair[2] || coin_pair[1] == coin_pair[3] {
-        order.push(ArbOrd::Sell);
-    }
-    // get second order
-    if coin_pair[2] == coin_pair[4] || coin_pair[2] == coin_pair[5] {
-        order.push(ArbOrd::Buy);
-    } else if coin_pair[3] == coin_pair[4] || coin_pair[3] == coin_pair[5] {
-        order.push(ArbOrd::Sell);
-    }
-    // get third order
-    if coin_pair[4] == coin_pair[0] || coin_pair[4] == coin_pair[1] {
-        order.push(ArbOrd::Buy);
-    } else if coin_pair[5] == coin_pair[0] || coin_pair[5] == coin_pair[1] {
-        order.push(ArbOrd::Sell);
-    }
-    order
+fn find_order_order(coin_pair: &[String; 6]) -> [ArbOrd; 3] {
+    [
+        // get first order
+        if coin_pair[0] == coin_pair[2] || coin_pair[0] == coin_pair[3] {
+            ArbOrd::Buy
+        } else if coin_pair[1] == coin_pair[2] || coin_pair[1] == coin_pair[3] {
+            ArbOrd::Sell
+        } else {
+            unreachable!()
+        },
+        // get second order
+        if coin_pair[2] == coin_pair[4] || coin_pair[2] == coin_pair[5] {
+            ArbOrd::Buy
+        } else if coin_pair[3] == coin_pair[4] || coin_pair[3] == coin_pair[5] {
+            ArbOrd::Sell
+        } else {
+            unreachable!()
+        },
+        // get third order
+        if coin_pair[4] == coin_pair[0] || coin_pair[4] == coin_pair[1] {
+            ArbOrd::Buy
+        } else if coin_pair[5] == coin_pair[0] || coin_pair[5] == coin_pair[1] {
+            ArbOrd::Sell
+        } else {
+            unreachable!()
+        },
+    ]
 }
 
 // TODO: this assumes all stable coins are pegged at us dollar
-fn calculate_profitablity(order: &[ArbOrd], coin_storage: [OrderBook; 3]) -> (f64, f64, f64, f64) {
-    let mut coin_amount = 0.0;
+// fn calculate_profitablity(
+//     exchange_info: &ExchangeInformation,
+//     pairs: &[String; 3],
+//     order: &[ArbOrd],
+//     coin_storage: [OrderBook; 3],
+// ) -> (f64, f64, f64, f64) {
+//     let mut coin_amount = 0.0;
+//     let mut qty = vec![];
+//     for (pair, symbol) in coin_storage.into_iter().zip(pairs.iter()) {
+//         coin_amount = match &order[0] {
+//             ArbOrd::Buy => {
+//                 let size = step_size(exchange_info, symbol, pair.asks[0].qty, pair.asks[0].price);
+//                 let size = STARTING_AMOUNT / pair.asks[0].price;
+//                 qty.push(size);
+//                 if size > pair.asks[0].qty {
+//                     return (0.0, 0.0, 0.0, 0.0);
+//                 } else {
+//                     size
+//                 }
+//             }
+//             ArbOrd::Sell => {
+//                 let size = STARTING_AMOUNT * pair.bids[0].price;
+//                 qty.push(size);
+//                 if size > pair.bids[0].qty {
+//                     return (0.0, 0.0, 0.0, 0.0);
+//                 } else {
+//                     size
+//                 }
+//             }
+//         }
+//     }
+//     coin_amount -= coin_amount * (MINIMUM_FEE_DECIMAL * 3.0);
+//     (coin_amount, qty[0], qty[1], qty[2])
+// }
+
+fn calculate_profitablity(
+    exchange_info: &ExchangeInformation,
+    pairs: &[String; 3],
+    order: &[ArbOrd],
+    coin_storage: [OrderBook; 3],
+) -> (f64, f64, f64, f64) {
     let mut qty = vec![];
-    for pair in coin_storage.into_iter() {
-        coin_amount = match &order[0] {
-            ArbOrd::Buy => {
-                let amnt = STARTING_AMOUNT / pair.asks[0].price;
-                qty.push(amnt);
-                if amnt > pair.asks[0].qty {
-                    return (0.0, 0.0, 0.0, 0.0);
-                } else {
-                    amnt
-                }
-            }
-            ArbOrd::Sell => {
-                let amnt = STARTING_AMOUNT * pair.bids[0].price;
-                qty.push(amnt);
-                if amnt > pair.bids[0].qty {
-                    return (0.0, 0.0, 0.0, 0.0);
-                } else {
-                    amnt
-                }
-            }
+    // transaction 1
+    let mut coin_amount: f64;
+    coin_amount = match &order[0] {
+        ArbOrd::Buy => {
+            let size = step_size(
+                exchange_info,
+                &pairs[0],
+                STARTING_AMOUNT,
+                coin_storage[0].asks[0].price,
+            );
+            qty.push(size);
+            size
         }
-    }
-    coin_amount -= coin_amount * (MINIMUM_FEE_DECIMAL * 3.0);
+        ArbOrd::Sell => {
+            let size = step_size(
+                exchange_info,
+                &pairs[0],
+                STARTING_AMOUNT,
+                coin_storage[0].bids[0].price,
+            );
+            qty.push(size);
+            size
+        }
+    };
+    // Transaction 2
+    coin_amount = match &order[1] {
+        ArbOrd::Buy => {
+            let size = step_size(
+                exchange_info,
+                &pairs[1],
+                coin_amount,
+                coin_storage[1].asks[0].price,
+            );
+            qty.push(size);
+            size
+        }
+        ArbOrd::Sell => {
+            let size = step_size(
+                exchange_info,
+                &pairs[1],
+                coin_amount,
+                coin_storage[1].bids[0].price,
+            );
+            qty.push(size);
+            size
+        }
+    };
+    // Transaction 3
+    coin_amount = match &order[2] {
+        ArbOrd::Buy => {
+            let size = step_size(
+                exchange_info,
+                &pairs[2],
+                coin_amount,
+                coin_storage[2].asks[0].price,
+            );
+            qty.push(size);
+            size
+        }
+        ArbOrd::Sell => {
+            let size = step_size(
+                exchange_info,
+                &pairs[2],
+                coin_amount,
+                coin_storage[2].bids[0].price,
+            );
+            qty.push(size);
+            size
+        }
+    };
     (coin_amount, qty[0], qty[1], qty[2])
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OrderStruct {
     pub symbol: String,
     pub side: ArbOrd,
@@ -184,18 +275,17 @@ pub async fn find_triangular_arbitrage(
                     };
                     let orders = find_order_order(split_pairs);
                     let (mut profit, qty1, qty2, qty3) = calculate_profitablity(
+                        &exchange_info,
+                        &pairs,
                         &orders,
                         [pair0.clone(), pair1.clone(), pair2.clone()],
                     );
                     profit -= STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
                         // info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        let mut orders =
+                        let orders =
                             create_order(&pairs, (pair0, pair1, pair2), orders, [qty1, qty2, qty3])
                                 .await;
-                        // ensure all orders match lot_size limit
-                        adhere_step_size(&exchange_info, &mut orders);
-
                         // removing price that led to order
                         remove_bought(&orderbook, &pairs, &orders).await;
                         validator_writer.send(orders).unwrap();
@@ -244,7 +334,7 @@ async fn clone_orderbook(
 async fn create_order(
     pairs: &[String; 3],
     local_orderbook: (OrderBook, OrderBook, OrderBook),
-    orders_order: Vec<ArbOrd>,
+    orders_order: [ArbOrd; 3],
     qtys: [f64; 3],
 ) -> Vec<OrderStruct> {
     let mut orders = vec![];
@@ -287,37 +377,49 @@ async fn create_order(
     orders
 }
 
-fn adhere_step_size(exchange_info: &ExchangeInformation, orders: &mut Vec<OrderStruct>) {
-    for order in orders {
-        for exchange_symbol_data in exchange_info.symbols.iter() {
-            let exchange_symbol = &exchange_symbol_data.symbol;
-            if order.symbol == *exchange_symbol {
-                for filter in &exchange_symbol_data.filters {
-                    if let Filters::LotSize {
-                        min_qty: _,
-                        max_qty: _,
-                        step_size,
-                    } = filter
-                    {
-                        let mut amount = order.size / order.price;
-                        if amount % step_size != 0.0 {
-                            let amount_str = format!("{}", amount);
-                            let amount_len = amount_str.split(".").last().unwrap().len();
-                            let step_size_len =
-                                format!("{}", step_size).split(".").last().unwrap().len();
+fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, price: f64) -> f64 {
+    for exchange_symbol_data in exchange_info.symbols.iter() {
+        let exchange_symbol = &exchange_symbol_data.symbol;
+        if *symbol == *exchange_symbol {
+            for filter in &exchange_symbol_data.filters {
+                if let Filters::LotSize {
+                    min_qty: _,
+                    max_qty: _,
+                    step_size,
+                } = filter
+                {
+                    let amount = size / price;
+                    if amount % step_size != 0.0 {
+                        let amount_str = format!("{}", amount);
+                        // let amount_len = amount_str.split(".").last().unwrap().len();
+                        let step_size_str = format!("{}", step_size);
+                        let mut step_size_arr = step_size_str.split(".");
+                        let step_size_len = if step_size_arr.next().unwrap() == "0" {
+                            step_size_arr.next().unwrap().len()
+                        } else {
+                            0
+                        };
 
-                            amount = amount_str[0..amount_len
-                                - (amount_len as i64 - step_size_len as i64).abs() as usize]
-                                .parse::<f64>()
-                                .unwrap();
-
-                            order.size = order.price * amount;
+                        let mut amount_arr: Vec<&str> = amount_str.split(".").collect();
+                        if amount_arr.len() == 1 {
+                            amount_arr.push("0")
                         }
+                        // println!("{}", amount_str);
+                        // println!("{:?}", amount_arr);
+                        return price
+                            * format!(
+                                "{}.{}",
+                                amount_arr[0],
+                                amount_arr[1][0..step_size_len].to_string()
+                            )
+                            .parse::<f64>()
+                            .unwrap();
                     }
                 }
             }
         }
     }
+    0.0
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -333,3 +435,23 @@ pub fn read_key() -> Key {
         .expect("Could not deserialize the file, error");
     serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[tokio::test]
+//     async fn test_adhere_step_size() {
+//         let orders : [OrderStruct; 3] = serde_json::from_str(
+//             r#"[
+//                 { "symbol": "USDCUSDT", "side": "Buy", "price": 0.9996, "size": 50.020008003201276 },
+//                 { "symbol": "ADAUSDC", "side": "Buy", "price": 0.4931, "size": 101.29791117420402 },
+//                 { "symbol": "ADAUSDT", "side": "Sell", "price": 0.4912, "size": 101.50375939849624 }
+//             ]"#,
+//         )
+//         .unwrap();
+//         assert_eq!(50.0, adhere_step_size(1.0, &orders[0]));
+//         assert_eq!(50.0, adhere_step_size(1.0, &orders[1]));
+//         assert_eq!(50.0, adhere_step_size(1.0, &orders[2]));
+//     }
+// }
