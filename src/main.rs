@@ -13,7 +13,6 @@ use websocket::{start_market_websockets, start_order_placer};
 
 mod func;
 mod interface;
-mod tests;
 use interface::BinanceInterface;
 mod websocket;
 
