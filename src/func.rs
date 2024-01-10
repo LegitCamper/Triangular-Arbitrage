@@ -379,8 +379,7 @@ async fn create_order(
 
 fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, price: f64) -> f64 {
     for exchange_symbol_data in exchange_info.symbols.iter() {
-        let exchange_symbol = &exchange_symbol_data.symbol;
-        if *symbol == *exchange_symbol {
+        if *symbol == exchange_symbol_data.symbol {
             for filter in &exchange_symbol_data.filters {
                 if let Filters::LotSize {
                     min_qty: _,
@@ -391,21 +390,26 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
                     let amount = size / price;
                     if amount % step_size != 0.0 {
                         let amount_str = format!("{}", amount);
-                        // let amount_len = amount_str.split(".").last().unwrap().len();
                         let step_size_str = format!("{}", step_size);
-                        let mut step_size_arr = step_size_str.split(".");
-                        let step_size_len = if step_size_arr.next().unwrap() == "0" {
-                            step_size_arr.next().unwrap().len()
+                        let step_size_arr: Vec<&str> = step_size_str.split(".").collect();
+                        let step_size_len = if step_size_arr[0] == "0" {
+                            step_size_arr[1].len()
                         } else {
                             0
                         };
 
-                        let mut amount_arr: Vec<&str> = amount_str.split(".").collect();
-                        if amount_arr.len() == 1 {
-                            amount_arr.push("0")
-                        }
-                        // println!("{}", amount_str);
-                        // println!("{:?}", amount_arr);
+                        let mut amount_arr = amount_str.split(".");
+                        println!(
+                            "{}",
+                            format!(
+                                "{}.{}",
+                                amount_arr.next().unwrap(),
+                                amount_arr.next().unwrap().slic
+                            )
+                        );
+                        let mut amount_arr = amount_str.split(".");
+                        let amount_arr =
+                            vec![amount_arr.next().unwrap(), amount_arr.next().unwrap()];
                         return price
                             * format!(
                                 "{}.{}",
@@ -414,6 +418,8 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
                             )
                             .parse::<f64>()
                             .unwrap();
+                    } else {
+                        return size;
                     }
                 }
             }
@@ -436,22 +442,24 @@ pub fn read_key() -> Key {
     serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interface::*;
 
-//     #[tokio::test]
-//     async fn test_adhere_step_size() {
-//         let orders : [OrderStruct; 3] = serde_json::from_str(
-//             r#"[
-//                 { "symbol": "USDCUSDT", "side": "Buy", "price": 0.9996, "size": 50.020008003201276 },
-//                 { "symbol": "ADAUSDC", "side": "Buy", "price": 0.4931, "size": 101.29791117420402 },
-//                 { "symbol": "ADAUSDT", "side": "Sell", "price": 0.4912, "size": 101.50375939849624 }
-//             ]"#,
-//         )
-//         .unwrap();
-//         assert_eq!(50.0, adhere_step_size(1.0, &orders[0]));
-//         assert_eq!(50.0, adhere_step_size(1.0, &orders[1]));
-//         assert_eq!(50.0, adhere_step_size(1.0, &orders[2]));
-//     }
-// }
+    #[tokio::test]
+    async fn test_step_size() {
+        let interface = BinanceInterface::new();
+        let exchange_info = interface.get_exchange_info().await.unwrap();
+
+        assert_eq!(
+            50.0,
+            step_size(
+                &exchange_info,
+                &String::from("USDCUSDT"),
+                0.9996,
+                50.020008003201276
+            )
+        );
+    }
+}
