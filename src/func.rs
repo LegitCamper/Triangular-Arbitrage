@@ -389,35 +389,25 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
                 {
                     let amount = size / price;
                     if amount % step_size != 0.0 {
-                        let amount_str = format!("{}", amount);
-                        let step_size_str = format!("{}", step_size);
-                        let step_size_arr: Vec<&str> = step_size_str.split(".").collect();
-                        let step_size_len = if step_size_arr[0] == "0" {
-                            step_size_arr[1].len()
+                        if *step_size == 1.0 {
+                            return amount.round();
                         } else {
-                            0
-                        };
+                            let step_size_len = step_size.fract().to_string().len();
+                            let mut shift = 0;
+                            for _ in 0..step_size_len {
+                                if shift == 0 {
+                                    shift = 10
+                                } else {
+                                    shift *= 10
+                                }
+                            }
 
-                        let mut amount_arr = amount_str.split(".");
-                        println!(
-                            "{}",
-                            format!(
-                                "{}.{}",
-                                amount_arr.next().unwrap(),
-                                amount_arr.next().unwrap().slic
-                            )
-                        );
-                        let mut amount_arr = amount_str.split(".");
-                        let amount_arr =
-                            vec![amount_arr.next().unwrap(), amount_arr.next().unwrap()];
-                        return price
-                            * format!(
-                                "{}.{}",
-                                amount_arr[0],
-                                amount_arr[1][0..step_size_len].to_string()
-                            )
-                            .parse::<f64>()
-                            .unwrap();
+                            let mut fract = amount.fract() * shift as f64;
+                            fract -= fract.fract();
+                            fract /= shift as f64;
+                            println!("{}", fract);
+                            return fract;
+                        }
                     } else {
                         return size;
                     }
