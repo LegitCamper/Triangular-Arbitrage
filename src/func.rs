@@ -388,26 +388,17 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
                 } = filter
                 {
                     let amount = size / price;
-                    if amount % step_size != 0.0 {
-                        if *step_size == 1.0 {
-                            return amount.round();
-                        } else {
-                            let step_size_len = step_size.fract().to_string().len();
-                            let mut shift = 0;
-                            for _ in 0..step_size_len {
-                                if shift == 0 {
-                                    shift = 10
-                                } else {
-                                    shift *= 10
-                                }
-                            }
-
+                    if amount % step_size != 0_f64 {
+                        let rounded_amount = if *step_size != 1_f64 {
+                            let shift = 10.0_f64.powf(step_size.fract().to_string().len() as f64);
                             let mut fract = amount.fract() * shift as f64;
                             fract -= fract.fract();
                             fract /= shift as f64;
-                            println!("{}", fract);
-                            return fract;
-                        }
+                            fract + amount.trunc()
+                        } else {
+                            amount.floor()
+                        };
+                        return rounded_amount * price;
                     } else {
                         return size;
                     }
@@ -415,7 +406,7 @@ fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, pr
             }
         }
     }
-    0.0
+    size
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -443,12 +434,33 @@ mod tests {
         let exchange_info = interface.get_exchange_info().await.unwrap();
 
         assert_eq!(
-            50.0,
+            // 49.98,
+            49.980000000000004,
             step_size(
                 &exchange_info,
                 &String::from("USDCUSDT"),
+                50.020008003201276,
                 0.9996,
-                50.020008003201276
+            )
+        );
+        assert_eq!(
+            // 101.28274,
+            101.297533,
+            step_size(
+                &exchange_info,
+                &String::from("ADAUSDC"),
+                101.29791117420402,
+                0.4931,
+            )
+        );
+        assert_eq!(
+            // 10.148192,
+            101.5035328,
+            step_size(
+                &exchange_info,
+                &String::from("ADAUSDT"),
+                101.50375939849624,
+                0.4912,
             )
         );
     }
