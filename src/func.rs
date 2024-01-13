@@ -1,6 +1,6 @@
 use binance::rest_model::{ExchangeInformation, Filters, OrderBook};
 use itertools::Itertools;
-use log::{info, trace};
+use log::{info, trace, warn};
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
@@ -116,119 +116,48 @@ fn find_order_order(coin_pair: &[String; 6]) -> [ArbOrd; 3] {
 }
 
 // TODO: this assumes all stable coins are pegged at us dollar
-// fn calculate_profitablity(
-//     exchange_info: &ExchangeInformation,
-//     pairs: &[String; 3],
-//     order: &[ArbOrd],
-//     coin_storage: [OrderBook; 3],
-// ) -> (f64, f64, f64, f64) {
-//     let mut coin_amount = 0.0;
-//     let mut qty = vec![];
-//     for (pair, symbol) in coin_storage.into_iter().zip(pairs.iter()) {
-//         coin_amount = match &order[0] {
-//             ArbOrd::Buy => {
-//                 let size = step_size(exchange_info, symbol, pair.asks[0].qty, pair.asks[0].price);
-//                 let size = STARTING_AMOUNT / pair.asks[0].price;
-//                 qty.push(size);
-//                 if size > pair.asks[0].qty {
-//                     return (0.0, 0.0, 0.0, 0.0);
-//                 } else {
-//                     size
-//                 }
-//             }
-//             ArbOrd::Sell => {
-//                 let size = STARTING_AMOUNT * pair.bids[0].price;
-//                 qty.push(size);
-//                 if size > pair.bids[0].qty {
-//                     return (0.0, 0.0, 0.0, 0.0);
-//                 } else {
-//                     size
-//                 }
-//             }
-//         }
-//     }
-//     coin_amount -= coin_amount * (MINIMUM_FEE_DECIMAL * 3.0);
-//     (coin_amount, qty[0], qty[1], qty[2])
-// }
-
 fn calculate_profitablity(
     exchange_info: &ExchangeInformation,
     pairs: &[String; 3],
     order: &[ArbOrd],
     coin_storage: [OrderBook; 3],
 ) -> (f64, f64, f64, f64) {
+    let mut coin_qty = STARTING_AMOUNT;
     let mut qty = vec![];
-    // transaction 1
-    let mut coin_amount: f64;
-    coin_amount = match &order[0] {
-        ArbOrd::Buy => {
-            let size = step_size(
-                exchange_info,
-                &pairs[0],
-                STARTING_AMOUNT,
-                coin_storage[0].asks[0].price,
-            );
-            qty.push(size);
-            size
-        }
-        ArbOrd::Sell => {
-            let size = step_size(
-                exchange_info,
-                &pairs[0],
-                STARTING_AMOUNT,
-                coin_storage[0].bids[0].price,
-            );
-            qty.push(size);
-            size
-        }
-    };
-    // Transaction 2
-    coin_amount = match &order[1] {
-        ArbOrd::Buy => {
-            let size = step_size(
-                exchange_info,
-                &pairs[1],
-                coin_amount,
-                coin_storage[1].asks[0].price,
-            );
-            qty.push(size);
-            size
-        }
-        ArbOrd::Sell => {
-            let size = step_size(
-                exchange_info,
-                &pairs[1],
-                coin_amount,
-                coin_storage[1].bids[0].price,
-            );
-            qty.push(size);
-            size
-        }
-    };
-    // Transaction 3
-    coin_amount = match &order[2] {
-        ArbOrd::Buy => {
-            let size = step_size(
-                exchange_info,
-                &pairs[2],
-                coin_amount,
-                coin_storage[2].asks[0].price,
-            );
-            qty.push(size);
-            size
-        }
-        ArbOrd::Sell => {
-            let size = step_size(
-                exchange_info,
-                &pairs[2],
-                coin_amount,
-                coin_storage[2].bids[0].price,
-            );
-            qty.push(size);
-            size
-        }
-    };
-    (coin_amount, qty[0], qty[1], qty[2])
+    for (pair, symbol) in coin_storage.into_iter().zip(pairs.iter()) {
+        coin_qty = match &order[0] {
+            ArbOrd::Buy => {
+                let size = step_size(
+                    exchange_info,
+                    symbol,
+                    pair.asks[0].qty - (pair.asks[0].qty * MINIMUM_FEE_DECIMAL),
+                    pair.asks[0].price,
+                );
+                qty.push(size);
+                if size > pair.asks[0].qty {
+                    return (0.0, 0.0, 0.0, 0.0);
+                } else {
+                    size
+                }
+            }
+            ArbOrd::Sell => {
+                let size = step_size(
+                    exchange_info,
+                    symbol,
+                    pair.bids[0].qty - (pair.bids[0].qty * MINIMUM_FEE_DECIMAL),
+                    pair.bids[0].price,
+                );
+                qty.push(size);
+                if size > pair.bids[0].qty {
+                    return (0.0, 0.0, 0.0, 0.0);
+                } else {
+                    size
+                }
+            }
+        };
+        coin_qty -= coin_qty * MINIMUM_FEE_DECIMAL;
+    }
+    (coin_qty, qty[0], qty[1], qty[2])
 }
 
 #[allow(dead_code)]
@@ -286,9 +215,13 @@ pub async fn find_triangular_arbitrage(
                         let orders =
                             create_order(&pairs, (pair0, pair1, pair2), orders, [qty1, qty2, qty3])
                                 .await;
-                        // removing price that led to order
-                        remove_bought(&orderbook, &pairs, &orders).await;
-                        validator_writer.send(orders).unwrap();
+
+                        // ensure orders adhere to binance's order filters
+                        if let Ok(_) = check_filters(&orders, &exchange_info) {
+                            // removing price that led to order
+                            remove_bought(&orderbook, &pairs, &orders).await;
+                            validator_writer.send(orders).unwrap();
+                        }
                     }
                 } else {
                     // warn!("None in orderbook for: {:?}", split_pairs);
@@ -377,6 +310,7 @@ async fn create_order(
     orders
 }
 
+// this returns quantity
 fn step_size(exchange_info: &ExchangeInformation, symbol: &String, size: f64, price: f64) -> f64 {
     for exchange_symbol_data in exchange_info.symbols.iter() {
         if *symbol == exchange_symbol_data.symbol {
@@ -423,8 +357,65 @@ pub fn read_key() -> Key {
     serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
 }
 
+fn check_filters(orders: &Vec<OrderStruct>, exchange_info: &ExchangeInformation) -> Result<(), ()> {
+    for order in orders.iter() {
+        for exchange_symbol_data in exchange_info.symbols.iter() {
+            let exchange_symbol = &exchange_symbol_data.symbol;
+            if *order.symbol == *exchange_symbol {
+                let filters = &exchange_symbol_data.filters;
+                for filter in filters {
+                    match check_filter(order, filter) {
+                        Ok(_) => (),
+                        Err(_) => return Err(()),
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// TODO: improve this func
+fn check_filter(order: &OrderStruct, filter: &Filters) -> Result<(), ()> {
+    if order.size == 0.0 {
+        return Err(());
+    }
+    match filter {
+        Filters::LotSize {
+            min_qty,
+            max_qty,
+            step_size,
+        } => {
+            if order.size < *min_qty {
+                warn!(
+                    "{} Requires min of {}, tried: {}",
+                    order.symbol, min_qty, order.size
+                );
+            } else if order.size > *max_qty {
+                warn!(
+                    "{} Requires max of {}, tried: {}",
+                    order.symbol, max_qty, order.size
+                );
+            } else if (order.size / order.price) % *step_size != 0.0 {
+                warn!(
+                    "{} Requires step size of {}: tried: {}",
+                    order.symbol,
+                    step_size,
+                    (order.size / order.price)
+                );
+            }
+            return Err(());
+        }
+        // TODO: add more checks
+        _ => (),
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use binance::rest_model::{Asks, Bids, OrderBook};
+
     use super::*;
     use crate::interface::*;
 
@@ -461,6 +452,56 @@ mod tests {
                 &String::from("ADAUSDT"),
                 101.50375939849624,
                 0.4912,
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_calculate_profitablity() {
+        let interface = BinanceInterface::new();
+        let exchange_info = interface.get_exchange_info().await.unwrap();
+
+        assert_eq!(
+            (1.0, 1.0, 1.0, 1.0,),
+            calculate_profitablity(
+                &exchange_info,
+                &["USDCUSDT".into(), "ADAUSDC".into(), "ADAUSDT".into()],
+                &[ArbOrd::Buy, ArbOrd::Buy, ArbOrd::Sell],
+                [
+                    OrderBook {
+                        last_update_id: 1,
+                        bids: vec![Bids {
+                            price: 50.020008003201276,
+                            qty: 0.9996,
+                        }],
+                        asks: vec![Asks {
+                            price: 50.020008003201276,
+                            qty: 0.9996,
+                        }]
+                    },
+                    OrderBook {
+                        last_update_id: 1,
+                        bids: vec![Bids {
+                            price: 101.29791117420402,
+                            qty: 0.4931,
+                        }],
+                        asks: vec![Asks {
+                            price: 101.29791117420402,
+                            qty: 0.4931,
+                        }]
+                    },
+                    OrderBook {
+                        last_update_id: 1,
+                        bids: vec![Bids {
+                            price: 101.50375939849624,
+                            qty: 0.4912,
+                        }],
+                        asks: vec![Asks {
+                            price: 101.50375939849624,
+                            qty: 0.4912,
+                        }]
+                    }
+                ],
             )
         );
     }

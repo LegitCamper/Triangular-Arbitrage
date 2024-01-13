@@ -1,9 +1,7 @@
 use binance::{
     account::*,
     api::*,
-    rest_model::{
-        Asks, Bids, ExchangeInformation, Filters, OrderBook, OrderSide, OrderType, TimeInForce,
-    },
+    rest_model::{Asks, Bids, ExchangeInformation, OrderBook, OrderSide, OrderType, TimeInForce},
     userstream::*,
     websockets::*,
     ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag},
@@ -15,14 +13,13 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
-use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::{
     sync::{
-        mpsc::{unbounded_channel, UnboundedSender},
-        Mutex,
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        oneshot, Mutex,
     },
     task::JoinHandle,
-    time::sleep,
+    time::timeout,
 };
 
 use crate::func::{self, OrderStruct};
@@ -191,31 +188,32 @@ async fn place_orders(
             match orders.try_recv() {
                 Ok(orders) => {
                     info!("Received orders: {:?}", orders);
-                    // check filters in order before executing
-                    // if let Ok(_) = check_filters(&orders, &exchange_info) {
                     for order in orders.iter() {
+                        let (tx, rx) = oneshot::channel::<String>();
+                        if let Err(_) = timeout(Duration::from_secs(10), rx).await {
+                            error!("Did not receive response from user websocket with order");
+                            unwind_orders().await;
+                            break;
+                        }
+
                         place_order(order, &exchange_info, &account).await;
+
                         // ensure order has gone through before continuing with following orders
-                        // have a timeout here incase it gets killed and not filled
-                        // TODO: create unwind func to undo all orders with market prices
                         let placed_order = placed_orders
                             .recv()
                             .await
                             .expect("user websocket closed channel or order");
                         if placed_order.symbol == order.symbol && placed_order.price == order.price
                         {
+                            tx.send("Recived".into()).unwrap();
                             info!("order went through succesfully");
                         } else {
-                            // TODO: better error handling here to resume after bad trade
+                            unwind_orders().await;
                             keep_running.swap(false, std::sync::atomic::Ordering::Relaxed);
                             panic!("Order failed to proccess in the correct order or at all");
                         }
                     }
-                    // }
-                    // sleep to ensure order batches goes through once at a time
-                    // will likely be removed once user websocket works: TODO
                     created_order = true;
-                    sleep(Duration::from_secs(10)).await;
                 }
                 Err(_) => (),
             }
@@ -228,6 +226,9 @@ async fn place_orders(
         }
     })
 }
+
+// TODO: design func to unwind 'stuck' orders
+async fn unwind_orders() {}
 
 async fn place_order(
     order: &func::OrderStruct,
@@ -286,49 +287,6 @@ fn get_precision(symbol: &String, exchange_info: &ExchangeInformation) -> Option
         }
     }
     None
-}
-
-fn check_filters(
-    orders: &Vec<func::OrderStruct>,
-    exchange_info: &ExchangeInformation,
-) -> Result<(), ()> {
-    for order in orders.iter() {
-        for exchange_symbol_data in exchange_info.symbols.iter() {
-            let exchange_symbol = &exchange_symbol_data.symbol;
-            if *order.symbol == *exchange_symbol {
-                let filters = &exchange_symbol_data.filters;
-                for filter in filters {
-                    match check_filter(order, filter) {
-                        Ok(_) => (),
-                        Err(_) => return Err(()),
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-// TODO: improve this func
-fn check_filter(order: &func::OrderStruct, filter: &Filters) -> Result<(), ()> {
-    info!("Filter: {:?}", filter);
-    match filter {
-        Filters::LotSize {
-            min_qty,
-            max_qty,
-            step_size,
-        } => {
-            if order.size < *min_qty || order.size > *max_qty || order.size % *step_size != 0.0 {
-                warn!("Failed lot size filter check for {}", order.symbol);
-                warn!("{} Requires min of {}", order.symbol, min_qty); // TODO: This can be removed once I find what the max amount I need to own is
-                warn!("{} Requires step size of {}", order.symbol, step_size);
-                return Err(());
-            }
-        }
-        // TODO: add more checks
-        _ => (),
-    }
-    Ok(())
 }
 
 #[allow(dead_code)]
