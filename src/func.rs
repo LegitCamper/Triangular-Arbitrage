@@ -111,25 +111,25 @@ pub enum ArbOrd {
 fn find_order_order(pairs: &[Symbol; 3]) -> [(Symbol, ArbOrd); 3] {
     [
         // get first order
-        if pairs[0].pair() == pairs[2].pair() || pairs[0].pair() == pairs[3].pair() {
+        if pairs[0].pair1 == pairs[1].pair1 || pairs[0].pair1 == pairs[1].pair2 {
             (pairs[0].clone(), ArbOrd::Buy)
-        } else if pairs[1].pair() == pairs[2].pair() || pairs[1].pair() == pairs[3].pair() {
+        } else if pairs[0].pair2 == pairs[1].pair1 || pairs[0].pair2 == pairs[1].pair2 {
             (pairs[0].clone(), ArbOrd::Sell)
         } else {
             unreachable!()
         },
         // get second order
-        if pairs[2].pair() == pairs[4].pair() || pairs[2].pair() == pairs[5].pair() {
+        if pairs[1].pair1 == pairs[2].pair1 || pairs[1].pair1 == pairs[2].pair2 {
             (pairs[1].clone(), ArbOrd::Buy)
-        } else if pairs[3].pair() == pairs[4].pair() || pairs[3].pair() == pairs[5].pair() {
+        } else if pairs[1].pair2 == pairs[2].pair1 || pairs[1].pair2 == pairs[2].pair2 {
             (pairs[1].clone(), ArbOrd::Sell)
         } else {
             unreachable!()
         },
         // get third order
-        if pairs[4].pair() == pairs[0].pair() || pairs[4].pair() == pairs[1].pair() {
+        if pairs[2].pair1 == pairs[0].pair1 || pairs[2].pair1 == pairs[0].pair2 {
             (pairs[2].clone(), ArbOrd::Buy)
-        } else if pairs[5].pair() == pairs[0].pair() || pairs[5].pair() == pairs[1].pair() {
+        } else if pairs[2].pair2 == pairs[0].pair1 || pairs[2].pair2 == pairs[0].pair2 {
             (pairs[2].clone(), ArbOrd::Sell)
         } else {
             unreachable!()
