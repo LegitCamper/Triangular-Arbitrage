@@ -9,7 +9,7 @@ use log::{info, LevelFilter::Info};
 use simple_logger::SimpleLogger;
 use tokio::signal;
 
-use func::{create_valid_pairs_catalog, find_triangular_arbitrage, read_key};
+use func::{create_valid_pairs_catalog, find_tri_arb, read_key};
 use websocket::{start_market_websockets, start_order_placer};
 
 mod func;
@@ -32,9 +32,9 @@ async fn main() {
     let interface = BinanceInterface::new();
     let exchange_info = interface.get_exchange_info().await.unwrap();
     let server_time = interface.get_server_time().await.unwrap();
-    let symbols = interface.get_symbols().await.unwrap();
-    let pairs = interface.get_pairs().await.unwrap();
-    let orderbook = interface.starter_orderbook(&symbols).await;
+    let (pairs, symbols) = interface.get_pairs().await.unwrap();
+    let (pairs, symbols) = (pairs.as_slice(), symbols.as_slice());
+    let orderbook = interface.starter_orderbook(&pairs).await;
 
     let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let (ord_handle, ord_sort_handle) =
@@ -46,7 +46,7 @@ async fn main() {
         &server_time,
     )
     .await;
-    let validator_task = find_triangular_arbitrage(
+    let validator_task = find_tri_arb(
         pair_combinations,
         user_channel,
         orderbook.clone(),

@@ -1,13 +1,13 @@
 use binance::account::*;
 use binance::api::*;
-
 use binance::general::*;
 use binance::market::*;
-
 use binance::rest_model::{ExchangeInformation, OrderBook};
-
+use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
+
+use crate::func::Symbol;
 
 #[allow(dead_code)]
 pub struct BinanceInterface {
@@ -24,18 +24,6 @@ impl BinanceInterface {
             account: Binance::new(None, None),
         }
     }
-    pub async fn get_symbols(&self) -> Option<Vec<String>> {
-        let general_info = self.general.exchange_info().await.ok()?;
-
-        let mut symbols: Vec<String> = Vec::new();
-
-        for symbol in general_info.symbols.iter() {
-            let symbol = symbol.symbol.clone(); //.to_lowercase();
-            symbols.push(symbol);
-        }
-
-        Some(symbols)
-    }
 
     pub async fn get_exchange_info(&self) -> Option<ExchangeInformation> {
         self.general.exchange_info().await.ok()
@@ -51,28 +39,34 @@ impl BinanceInterface {
             .ok()
     }
 
-    pub async fn get_pairs(&self) -> Option<Vec<(String, String)>> {
+    pub async fn get_pairs(&self) -> Option<(Vec<Symbol>, Vec<String>)> {
         let general_info = self.general.exchange_info().await.ok()?;
 
-        let mut symbols: Vec<(String, String)> = Vec::new();
+        let mut symbols: Vec<String> = vec![];
+        let mut pairs: Vec<Symbol> = vec![];
 
         for symbol in general_info.symbols.iter() {
             if symbol.base_asset.as_str() != "USD" || symbol.quote_asset.as_str() != "USD" {
-                symbols.push((symbol.base_asset.clone(), symbol.quote_asset.clone()));
+                pairs.push(Symbol::new(
+                    &symbol.base_asset.clone(),
+                    &symbol.quote_asset.clone(),
+                ));
+                symbols.push(symbol.base_asset.clone());
+                symbols.push(symbol.quote_asset.clone());
             }
         }
 
-        Some(symbols)
+        Some((pairs, symbols.into_iter().sorted().dedup().collect()))
     }
 
     pub async fn starter_orderbook(
         &self,
-        symbols: &Vec<String>,
+        symbols: &[Symbol],
     ) -> Arc<Mutex<HashMap<String, OrderBook>>> {
         let mut orderbook = HashMap::new();
-        for symbol in symbols.iter() {
-            let depth = self.market.get_depth(symbol).await.unwrap();
-            orderbook.insert(symbol.to_owned(), depth);
+        for symbol in symbols.iter().filter(|s| !s.pair().contains("4")) {
+            let depth = self.market.get_depth(symbol.pair()).await.unwrap();
+            orderbook.insert(symbol.pair(), depth);
         }
 
         Arc::new(Mutex::new(orderbook))

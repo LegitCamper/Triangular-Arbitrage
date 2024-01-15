@@ -22,23 +22,22 @@ use tokio::{
     time::timeout,
 };
 
-use crate::func::{self, OrderStruct};
+use crate::func::{ArbOrd, Key, OrderStruct};
 
 pub async fn start_market_websockets(
     keep_running: Arc<AtomicBool>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
-    symbols: &Vec<String>,
+    symbols: &[String],
 ) -> (JoinHandle<()>, Vec<JoinHandle<()>>) {
     let (tx, mut rx) = unbounded_channel();
 
     let mut orderbook_handles = Vec::new();
     for stream in symbols.iter() {
-        let symbol = stream.split("@").next().unwrap();
         orderbook_handles.push(multiple_orderbook(
             keep_running.clone(),
             tx.clone(),
             vec![stream.to_string()],
-            symbol.to_string(),
+            stream.to_string(),
         ));
     }
     let orderbook_sort_handle = tokio::spawn(async move {
@@ -71,7 +70,7 @@ pub async fn start_market_websockets(
 
 pub async fn start_order_placer(
     keep_running: Arc<AtomicBool>,
-    key: func::Key,
+    key: Key,
     exchange_info: &ExchangeInformation,
     server_time: &i64,
 ) -> (
@@ -79,7 +78,7 @@ pub async fn start_order_placer(
     UnboundedSender<Vec<OrderStruct>>,
     JoinHandle<()>,
 ) {
-    let (tx, rx) = unbounded_channel::<Vec<func::OrderStruct>>();
+    let (tx, rx) = unbounded_channel::<Vec<OrderStruct>>();
     let (orders_placed_rx, user_websocket_handle) =
         user_stream(keep_running.clone(), key.clone()).await;
     let user_handle = place_orders(
@@ -172,10 +171,10 @@ fn multiple_orderbook(
 
 async fn place_orders(
     keep_running: Arc<AtomicBool>,
-    key: func::Key,
+    key: Key,
     exchange_info: ExchangeInformation,
     server_time: i64,
-    mut orders: UnboundedReceiver<Vec<func::OrderStruct>>,
+    mut orders: UnboundedReceiver<Vec<OrderStruct>>,
     mut placed_orders: UnboundedReceiver<OrderUpdate>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -230,14 +229,10 @@ async fn place_orders(
 // TODO: design func to unwind 'stuck' orders
 async fn unwind_orders() {}
 
-async fn place_order(
-    order: &func::OrderStruct,
-    exchange_info: &ExchangeInformation,
-    account: &Account,
-) {
+async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, account: &Account) {
     let symbol = order.symbol.clone();
     let limit_order = match order.side {
-        func::ArbOrd::Buy => OrderRequest {
+        ArbOrd::Buy => OrderRequest {
             symbol: symbol.to_string(),
             quantity: Some(format!("{}", order.size)),
             price: Some(order.price),
@@ -251,7 +246,7 @@ async fn place_order(
             new_order_resp_type: None,
             ..OrderRequest::default()
         },
-        func::ArbOrd::Sell => OrderRequest {
+        ArbOrd::Sell => OrderRequest {
             symbol: symbol.to_string(),
             quantity: Some(format!("{}", order.size)),
             price: Some(order.price),
@@ -292,7 +287,7 @@ fn get_precision(symbol: &String, exchange_info: &ExchangeInformation) -> Option
 #[allow(dead_code)]
 async fn user_stream(
     keep_running: Arc<AtomicBool>,
-    key: func::Key,
+    key: Key,
 ) -> (UnboundedReceiver<OrderUpdate>, JoinHandle<()>) {
     let (tx, rx) = unbounded_channel::<OrderUpdate>();
     let user_stream: UserStream = Binance::new(Some(key.key), Some(key.secret));
