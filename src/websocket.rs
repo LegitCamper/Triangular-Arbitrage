@@ -189,7 +189,7 @@ async fn place_orders(
                     info!("Received orders: {:?}", orders);
                     for order in orders.iter() {
                         let (tx, rx) = oneshot::channel::<String>();
-                        if let Err(_) = timeout(Duration::from_secs(10), rx).await {
+                        if let Err(_) = timeout(Duration::from_secs(60), rx).await {
                             error!("Did not receive response from user websocket with order");
                             unwind_orders().await;
                             break;
@@ -299,10 +299,10 @@ async fn user_stream(
             let mut web_socket: WebSockets<'_, WebsocketEvent> =
                 WebSockets::new(|event: WebsocketEvent| {
                     if let WebsocketEvent::OrderUpdate(trade) = event {
-                        // info!(
-                        //     "Symbol: {}, Side: {:?}, Price: {}, Execution Type: {:?}",
-                        //     trade.symbol, trade.side, trade.price, trade.execution_type
-                        // );
+                        info!(
+                            "Symbol: {}, Side: {:?}, Price: {}, Execution Type: {:?}",
+                            trade.symbol, trade.side, trade.price, trade.execution_type
+                        );
                         tx.send(*trade).expect("Failed to send trade");
                     };
 
