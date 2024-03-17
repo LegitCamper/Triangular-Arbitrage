@@ -6,7 +6,7 @@ use binance::{
     websockets::*,
     ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag},
 };
-use chrono::Utc;
+// use chrono::Utc;
 use log::{error, info, warn};
 use std::{
     collections::HashMap,
@@ -173,14 +173,14 @@ async fn place_orders(
     keep_running: Arc<AtomicBool>,
     key: Key,
     exchange_info: ExchangeInformation,
-    server_time: i64,
+    _server_time: i64,
     mut orders: UnboundedReceiver<Vec<OrderStruct>>,
     mut placed_orders: UnboundedReceiver<OrderUpdate>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let mut account: Account = Binance::new(Some(key.key), Some(key.secret));
+        let account: Account = Binance::new(Some(key.key), Some(key.secret));
         // fix server_time_diff to be allgined with server time
-        account.server_time_diff = Utc::now().timestamp_millis() + server_time;
+        // account.server_time_diff = Utc::now().timestamp_millis() + server_time;
 
         loop {
             let mut created_order = false;
@@ -234,7 +234,7 @@ async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, a
     let limit_order = match order.side {
         ArbOrd::Buy => OrderRequest {
             symbol: symbol.to_string(),
-            quantity: Some(format!("{}", order.size)),
+            quantity: Some(order.amount),
             price: Some(order.price),
             order_type: OrderType::Limit,
             quote_order_qty: None,
@@ -248,7 +248,7 @@ async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, a
         },
         ArbOrd::Sell => OrderRequest {
             symbol: symbol.to_string(),
-            quantity: Some(format!("{}", order.size)),
+            quantity: Some(order.amount),
             price: Some(order.price),
             order_type: OrderType::Limit,
             quote_order_qty: None,
@@ -261,11 +261,8 @@ async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, a
             ..OrderRequest::default()
         },
     };
-    let precision = get_precision(&symbol, &exchange_info).unwrap();
-    match account
-        .place_order(limit_order, precision.0, precision.1)
-        .await
-    {
+    let _precision = get_precision(&symbol, &exchange_info).unwrap();
+    match account.place_order(limit_order).await {
         Ok(answer) => info!("{:?}", answer),
         Err(e) => error!("Error: {e}"),
     }

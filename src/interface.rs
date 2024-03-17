@@ -1,8 +1,12 @@
+use crate::func::Key;
 use binance::account::*;
 use binance::api::*;
+use binance::config::*;
 use binance::general::*;
 use binance::market::*;
+use binance::rest_model::TradeFees;
 use binance::rest_model::{ExchangeInformation, OrderBook};
+use binance::wallet::*;
 use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -14,19 +18,56 @@ pub struct BinanceInterface {
     pub general: General,
     market: Market,
     account: Account,
+    wallet: Wallet,
 }
 
 impl BinanceInterface {
-    pub fn new() -> Self {
-        BinanceInterface {
-            general: Binance::new(None, None),
-            market: Binance::new(None, None),
-            account: Binance::new(None, None),
+    pub fn new(key: &Key, test: bool) -> Self {
+        if test {
+            let config = Config {
+                binance_us_api: true,
+                ..Config::testnet()
+            };
+            // if config.binance_us_api != true {
+            //     panic!("fake");
+            // } else {
+            //     panic!("bullshit");
+            // }
+            BinanceInterface {
+                general: Binance::new_with_config(None, None, &config),
+                market: Binance::new_with_config(None, None, &config),
+                account: Binance::new_with_config(
+                    Some(key.key.clone()),
+                    Some(key.secret.clone()),
+                    &config,
+                ),
+                wallet: Binance::new_with_config(
+                    Some(key.key.clone()),
+                    Some(key.secret.clone()),
+                    &config,
+                ),
+            }
+        } else {
+            let config = Config {
+                binance_us_api: true,
+                ..Default::default()
+            };
+            BinanceInterface {
+                general: Binance::new_with_config(None, None, &config),
+                market: Binance::new_with_config(None, None, &config),
+                account: Binance::new_with_config(None, None, &config),
+                wallet: Binance::new_with_config(None, None, &config),
+            }
         }
     }
 
     pub async fn get_exchange_info(&self) -> Option<ExchangeInformation> {
         self.general.exchange_info().await.ok()
+    }
+
+    pub async fn get_account_fees(&self) -> Option<TradeFees> {
+        println!("{:?}", self.wallet.trade_fees(None).await);
+        self.wallet.trade_fees(None).await.ok()
     }
 
     pub async fn get_server_time(&self) -> Option<i64> {

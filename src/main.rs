@@ -29,8 +29,10 @@ async fn main() {
 
     let keep_running = Arc::new(AtomicBool::new(true));
 
-    let interface = BinanceInterface::new();
+    let key = read_key();
+    let interface = BinanceInterface::new(&key, false);
     let exchange_info = interface.get_exchange_info().await.unwrap();
+    let trading_fees = interface.get_account_fees().await.unwrap();
     let server_time = interface.get_server_time().await.unwrap();
     let (pairs, symbols) = interface.get_pairs().await.unwrap();
     let (pairs, symbols) = (pairs.as_slice(), symbols.as_slice());
@@ -39,18 +41,14 @@ async fn main() {
     let pair_combinations = create_valid_pairs_catalog(pairs).await;
     let (ord_handle, ord_sort_handle) =
         start_market_websockets(keep_running.clone(), orderbook.clone(), &symbols).await;
-    let (user_handle, user_channel, user_websocket_handle) = start_order_placer(
-        keep_running.clone(),
-        read_key(),
-        &exchange_info,
-        &server_time,
-    )
-    .await;
+    let (user_handle, user_channel, user_websocket_handle) =
+        start_order_placer(keep_running.clone(), key, &exchange_info, &server_time).await;
     let validator_task = find_tri_arb(
         pair_combinations,
         user_channel,
         orderbook.clone(),
         exchange_info.clone(),
+        trading_fees,
     )
     .await;
 

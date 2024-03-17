@@ -1,6 +1,8 @@
-use binance::rest_model::{ExchangeInformation, Filters, OrderBook};
+use binance::rest_model::{ExchangeInformation, Filters, OrderBook, TradeFees};
 use itertools::Itertools;
-use log::{trace, warn};
+use log::{error, trace, warn};
+use rust_decimal::prelude::*;
+use rust_decimal_macros::dec;
 use serde::Deserialize;
 use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
@@ -11,9 +13,22 @@ use tokio::{
 
 // // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
-const STARTING_AMOUNT: f64 = 50.0; // Staring amount in USD
-const MINIMUN_PROFIT: f64 = 0.001; // in USD
-const MINIMUM_FEE_DECIMAL: f64 = 0.0057;
+const STARTING_AMOUNT: Decimal = dec!(50.0); // Staring amount in USD
+const MINIMUN_PROFIT: Decimal = dec!(0.001); // in USD
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Key {
+    pub key: String,
+    pub secret: String,
+}
+
+pub fn read_key() -> Key {
+    let mut file = File::open("key.json").expect("Could not read the json file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .expect("Could not deserialize the file, error");
+    serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
+}
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
@@ -137,51 +152,74 @@ fn find_order_order(pairs: &[Symbol; 3]) -> [(Symbol, ArbOrd); 3] {
     ]
 }
 
-// TODO: this assumes all stable coins are pegged at us dollar
+fn find_fee(trade_fees: &TradeFees, symbol: &Symbol) -> Option<Decimal> {
+    for trade_fee in trade_fees {
+        if trade_fee.symbol == symbol.pair() {
+            // Should always be taker
+            return Some(trade_fee.taker_commission);
+        }
+    }
+    None
+}
+
+// TODO: this assumes all stable coins in list are pinned at us dollar
 fn calculate_profitablity(
+    trading_fees: &TradeFees,
     exchange_info: &ExchangeInformation,
     order: &[(Symbol, ArbOrd); 3],
     coin_storage: [OrderBook; 3],
-) -> (f64, Vec<f64>, Vec<f64>) {
+) -> Option<(Decimal, Vec<Decimal>, Vec<Decimal>)> {
     let mut coin_qty = STARTING_AMOUNT;
     let mut qtys = vec![];
     let mut prices = vec![];
     for (coin_data, (symbol, order)) in coin_storage.iter().zip(order.iter()) {
         coin_qty = match &order {
             ArbOrd::Buy => {
-                let size = step_size(
+                let amount = adhere_filters(
                     exchange_info,
                     symbol,
                     coin_data.asks[0].qty,
                     coin_data.asks[0].price,
-                );
-                qtys.push(size);
+                )?;
+                qtys.push(amount);
                 prices.push(coin_data.asks[0].price);
-                if size > coin_data.asks[0].qty {
-                    return (0.0, vec![], vec![]);
+                if amount > coin_data.asks[0].qty {
+                    // TODO: check this logic
+                    error!(
+                        "not enough coins, I want: {}, they want: {}",
+                        amount, coin_data.asks[0].qty
+                    );
+                    return None;
                 } else {
-                    size
+                    amount
                 }
             }
             ArbOrd::Sell => {
-                let size = step_size(
+                let amount = adhere_filters(
                     exchange_info,
                     symbol,
                     coin_data.bids[0].qty,
                     coin_data.bids[0].price,
-                );
-                qtys.push(size);
+                )?;
+                qtys.push(amount);
                 prices.push(coin_data.bids[0].price);
-                if size > coin_data.bids[0].qty {
-                    return (0.0, vec![], vec![]);
+                if amount > coin_data.bids[0].qty {
+                    // TODO: check this logic
+                    error!(
+                        "not enough coins, I want: {}, they want: {}",
+                        amount, coin_data.bids[0].qty
+                    );
+                    return None;
                 } else {
-                    size
+                    amount
                 }
             }
         };
-        coin_qty -= coin_qty * MINIMUM_FEE_DECIMAL;
+        // TODO: this might be able to be paid with the amount cut for filters
+        coin_qty -= coin_qty * find_fee(&trading_fees, symbol)?;
+        println!("coin_qty: {coin_qty}");
     }
-    (coin_qty, qtys, prices)
+    Some((coin_qty, qtys, prices))
 }
 
 #[allow(dead_code)]
@@ -189,8 +227,8 @@ fn calculate_profitablity(
 pub struct OrderStruct {
     pub symbol: String,
     pub side: ArbOrd,
-    pub price: f64,
-    pub size: f64,
+    pub price: Decimal,
+    pub amount: Decimal,
 }
 
 pub async fn find_tri_arb(
@@ -198,6 +236,7 @@ pub async fn find_tri_arb(
     validator_writer: mpsc::UnboundedSender<Vec<OrderStruct>>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
     exchange_info: ExchangeInformation,
+    trading_fees: TradeFees,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
 
@@ -221,23 +260,29 @@ pub async fn find_tri_arb(
                         continue 'inner;
                     };
                     let orders = find_order_order(pairs);
-                    let (mut profit, prices, sizes) = calculate_profitablity(
+                    let (mut profit, prices, amounts) = match calculate_profitablity(
+                        &trading_fees,
                         &exchange_info,
                         &orders,
                         [pair0.clone(), pair1.clone(), pair2.clone()],
-                    );
+                    ) {
+                        Some((profit, prices, amounts)) => (profit, prices, amounts),
+                        None => continue 'inner,
+                    };
                     profit -= STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
-                        // info!("Profit: {profit}, pairs: {:?}", split_pairs);
-                        let orders =
-                            create_order(orders, sizes.as_slice(), prices.as_slice()).await;
+                        warn!("Profit: {profit}, pairs: {:?}", orders);
+                        let orders = create_order(
+                            &trading_fees,
+                            orders,
+                            amounts.as_slice(),
+                            prices.as_slice(),
+                        )
+                        .await;
 
-                        // ensure orders adhere to binance's order filters
-                        if let Ok(_) = check_filters(&orders, &exchange_info) {
-                            // removing price that led to order
-                            remove_bought(&orderbook, &pairs, &orders).await;
-                            validator_writer.send(orders).unwrap();
-                        }
+                        // removing price that led to order
+                        remove_bought(&orderbook, &pairs, &orders).await;
+                        validator_writer.send(orders).unwrap();
                     }
                 } else {
                     // warn!("None in orderbook for: {:?}", split_pairs);
@@ -281,242 +326,224 @@ async fn clone_orderbook(
 }
 
 async fn create_order(
+    trading_fees: &TradeFees,
     orders_order: [(Symbol, ArbOrd); 3],
-    qtys: &[f64],
-    prices: &[f64],
+    qtys: &[Decimal],
+    prices: &[Decimal],
 ) -> Vec<OrderStruct> {
     let mut orders = vec![];
 
     for (count, (symbol, side)) in orders_order.iter().enumerate() {
         // calculate fees
-        let size = if count > 0 {
-            qtys[count] - qtys[count] * MINIMUM_FEE_DECIMAL
+        let amount = if count > 0 {
+            qtys[count] - qtys[count] * find_fee(trading_fees, symbol).unwrap()
         } else {
             qtys[count]
         };
         match side {
-            ArbOrd::Buy => {
-                // warn!("Error, {:?}, ", orderbook);
-                orders.push(OrderStruct {
-                    symbol: symbol.pair(),
-                    side: side.clone(),
-                    price: prices[count],
-                    size,
-                })
-            }
-            ArbOrd::Sell => {
-                // warn!("Error, {:?}, ", orderbook);
-                orders.push(OrderStruct {
-                    symbol: symbol.pair(),
-                    side: side.clone(),
-                    price: prices[count],
-                    size,
-                })
-            }
+            ArbOrd::Buy => orders.push(OrderStruct {
+                symbol: symbol.pair(),
+                side: side.clone(),
+                price: prices[count],
+                amount,
+            }),
+            ArbOrd::Sell => orders.push(OrderStruct {
+                symbol: symbol.pair(),
+                side: side.clone(),
+                price: prices[count],
+                amount,
+            }),
         }
     }
     orders
 }
 
-// this returns quantity
-fn step_size(exchange_info: &ExchangeInformation, symbol: &Symbol, size: f64, price: f64) -> f64 {
+fn symbol_filters(symbol: &Symbol, exchange_info: &ExchangeInformation) -> Option<Vec<Filters>> {
     for exchange_symbol_data in exchange_info.symbols.iter() {
         if *symbol.pair() == exchange_symbol_data.symbol {
-            for filter in &exchange_symbol_data.filters {
-                if let Filters::LotSize {
-                    min_qty: _,
-                    max_qty: _,
-                    step_size,
-                } = filter
-                {
-                    let amount = size / price;
-                    if amount % step_size != 0_f64 {
-                        let rounded_amount = if *step_size != 1_f64 {
-                            let shift = 10.0_f64.powf(step_size.fract().to_string().len() as f64);
-                            let mut fract = amount.fract() * shift as f64;
-                            fract -= fract.fract();
-                            fract /= shift as f64;
-                            fract + amount.trunc()
-                        } else {
-                            amount.floor()
-                        };
-                        return rounded_amount * price;
-                    } else {
-                        return size;
-                    }
+            return Some(exchange_symbol_data.filters.clone());
+        }
+    }
+    None
+}
+
+fn round_step_size(amount: Decimal, step_size: Decimal) -> Decimal {
+    if step_size < dec!(1) {
+        let shift = step_size.fract().normalize().scale();
+        return amount.trunc() + amount.fract().trunc_with_scale(shift);
+    } else {
+        return amount.floor();
+    };
+}
+fn adhere_filters(
+    exchange_info: &ExchangeInformation,
+    symbol: &Symbol,
+    mut amount: Decimal,
+    _price: Decimal,
+) -> Option<Decimal> {
+    let filters = symbol_filters(symbol, exchange_info)?;
+    for filter in filters {
+        match filter {
+            Filters::LotSize {
+                min_qty,
+                max_qty,
+                step_size,
+            } => {
+                if amount < min_qty {
+                    error!(
+                        "TRIED TO BUY LESS THAN THE REQUIRED AMOUNT: pair {}, min {}, qty {}",
+                        symbol.pair(),
+                        min_qty,
+                        amount
+                    );
+                    return None;
+                }
+                if amount > max_qty {
+                    amount = max_qty;
+                }
+                if (amount % step_size) != dec!(0) {
+                    round_step_size(amount, step_size);
+                } else {
+                    return Some(amount);
                 }
             }
+            // TODO: add more checks
+            _ => {}
         }
     }
-    size
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct Key {
-    pub key: String,
-    pub secret: String,
-}
-
-pub fn read_key() -> Key {
-    let mut file = File::open("key.json").expect("Could not read the json file");
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .expect("Could not deserialize the file, error");
-    serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
-}
-
-fn check_filters(orders: &Vec<OrderStruct>, exchange_info: &ExchangeInformation) -> Result<(), ()> {
-    for order in orders.iter() {
-        for exchange_symbol_data in exchange_info.symbols.iter() {
-            let exchange_symbol = &exchange_symbol_data.symbol;
-            if *order.symbol == *exchange_symbol {
-                let filters = &exchange_symbol_data.filters;
-                for filter in filters {
-                    match check_filter(order, filter) {
-                        Ok(_) => (),
-                        Err(_) => return Err(()),
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-// TODO: improve this func
-fn check_filter(order: &OrderStruct, filter: &Filters) -> Result<(), ()> {
-    if order.size == 0.0 {
-        return Err(());
-    }
-    match filter {
-        Filters::LotSize {
-            min_qty,
-            max_qty,
-            step_size,
-        } => {
-            if order.size < *min_qty {
-                warn!(
-                    "{} Requires min of {}, tried: {}",
-                    order.symbol, min_qty, order.size
-                );
-            } else if order.size > *max_qty {
-                warn!(
-                    "{} Requires max of {}, tried: {}",
-                    order.symbol, max_qty, order.size
-                );
-            } else if (order.size / order.price) % *step_size != 0.0 {
-                warn!(
-                    "{} Requires step size of {}: tried: {}",
-                    order.symbol,
-                    step_size,
-                    (order.size / order.price)
-                );
-            }
-            return Err(());
-        }
-        // TODO: add more checks
-        _ => (),
-    }
-    Ok(())
+    None
 }
 
 #[cfg(test)]
 mod tests {
-    use binance::rest_model::{Asks, Bids, OrderBook};
+    use binance::rest_model::{Asks, Bids, ExchangeInformation, Filters, OrderBook};
     use lazy_static::lazy_static;
 
     use super::*;
+    use crate::func::Key;
     use crate::interface::*;
 
     lazy_static! {
-        static ref INTERFACE: BinanceInterface = BinanceInterface::new();
+        static ref INTERFACE: BinanceInterface = BinanceInterface::new(
+            &Key {
+                key: "".to_string(),
+                secret: "".to_string()
+            },
+            true
+        );
+    }
+
+    fn get_step_size(symbol: &Symbol, exchange_info: &ExchangeInformation) -> Option<Decimal> {
+        for filter in symbol_filters(symbol, exchange_info).unwrap() {
+            if let Filters::LotSize {
+                min_qty: _,
+                max_qty: _,
+                step_size,
+            } = filter
+            {
+                return Some(step_size.normalize());
+            }
+        }
+        None
     }
 
     #[tokio::test]
     async fn test_step_size() {
         let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
+        let mut symbol: Symbol;
 
+        symbol = Symbol::new("USDC", "USDT");
+        assert_eq!(dec!(1), get_step_size(&symbol, &exchange_info).unwrap());
         assert_eq!(
-            // 49.98,
-            49.980000000000004,
-            step_size(
-                &exchange_info,
-                &Symbol::new("USDC", "USDT"),
-                50.020008003201276,
-                0.9996,
+            dec!(50),
+            round_step_size(
+                dec!(50.020008003201276),
+                get_step_size(&symbol, &exchange_info).unwrap()
             )
         );
+
+        symbol = Symbol::new("ADA", "USDC");
+        assert_eq!(dec!(0.1), get_step_size(&symbol, &exchange_info).unwrap());
         assert_eq!(
-            // 101.28274,
-            101.297533,
-            step_size(
-                &exchange_info,
-                &Symbol::new("ADA", "USDC"),
-                101.29791117420402,
-                0.4931,
+            dec!(101.2),
+            round_step_size(
+                dec!(101.29791117420402),
+                get_step_size(&symbol, &exchange_info).unwrap()
             )
         );
+
+        symbol = Symbol::new("ADA", "USDT");
+        // panic!("{}", get_step_size(&symbol, &exchange_info).unwrap());
+        assert_eq!(dec!(0.1), get_step_size(&symbol, &exchange_info).unwrap());
         assert_eq!(
-            // 10.148192,
-            101.5035328,
-            step_size(
-                &exchange_info,
-                &Symbol::new("ADA", "USDT"),
-                101.50375939849624,
-                0.4912,
+            dec!(101.5),
+            round_step_size(
+                dec!(101.50375939849624),
+                get_step_size(&symbol, &exchange_info).unwrap()
             )
         );
     }
 
     #[tokio::test]
     async fn test_calculate_profitablity() {
-        let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
+        use binance::{api::*, config::*, rest_model::*, wallet::*};
+        let wallet: Wallet = Binance::new_with_env(&Config::testnet());
+        let records = wallet.trade_fees(None).await;
+        assert!(records.is_ok(), "{:?}", records);
 
-        assert_eq!(
-            (1.0, vec![49.980000000000004,], vec![0.9996, 0.4931, 0.4912],),
-            calculate_profitablity(
-                &exchange_info,
-                &[
-                    (Symbol::new("USDC", "USDT"), ArbOrd::Sell),
-                    (Symbol::new("ADA", "USDC"), ArbOrd::Sell),
-                    (Symbol::new("ADA", "USDT"), ArbOrd::Buy),
-                ],
-                [
-                    OrderBook {
-                        last_update_id: 1,
-                        bids: vec![Bids {
-                            qty: 50.020008003201276,
-                            price: 0.9996,
-                        }],
-                        asks: vec![Asks {
-                            qty: 50.020008003201276,
-                            price: 0.9996,
-                        }]
-                    },
-                    OrderBook {
-                        last_update_id: 1,
-                        bids: vec![Bids {
-                            qty: 101.29791117420402,
-                            price: 0.4931,
-                        }],
-                        asks: vec![Asks {
-                            qty: 101.29791117420402,
-                            price: 0.4931,
-                        }]
-                    },
-                    OrderBook {
-                        last_update_id: 1,
-                        bids: vec![Bids {
-                            qty: 101.50375939849624,
-                            price: 0.4912,
-                        }],
-                        asks: vec![Asks {
-                            qty: 101.50375939849624,
-                            price: 0.4912,
-                        }]
-                    }
-                ],
-            )
-        );
+        // let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
+        // let trading_fees = INTERFACE.get_account_fees().await.unwrap();
+
+        //     assert_eq!(
+        //         Some((
+        //             dec!(1.0),
+        //             vec![dec!(49.980000000000004),],
+        //             vec![dec!(0.9996), dec!(0.4931), dec!(0.4912)],
+        //         )),
+        //         calculate_profitablity(
+        //             &trading_fees,
+        //             &exchange_info,
+        //             &[
+        //                 (Symbol::new("USDC", "USDT"), ArbOrd::Sell),
+        //                 (Symbol::new("ADA", "USDC"), ArbOrd::Sell),
+        //                 (Symbol::new("ADA", "USDT"), ArbOrd::Buy),
+        //             ],
+        //             [
+        //                 OrderBook {
+        //                     last_update_id: 1,
+        //                     bids: vec![Bids {
+        //                         qty: dec!(50.020008003201276),
+        //                         price: dec!(0.9996),
+        //                     }],
+        //                     asks: vec![Asks {
+        //                         qty: dec!(50.020008003201276),
+        //                         price: dec!(0.9996),
+        //                     }]
+        //                 },
+        //                 OrderBook {
+        //                     last_update_id: 1,
+        //                     bids: vec![Bids {
+        //                         qty: dec!(101.29791117420402),
+        //                         price: dec!(0.4931),
+        //                     }],
+        //                     asks: vec![Asks {
+        //                         qty: dec!(101.29791117420402),
+        //                         price: dec!(0.4931),
+        //                     }]
+        //                 },
+        //                 OrderBook {
+        //                     last_update_id: 1,
+        //                     bids: vec![Bids {
+        //                         qty: dec!(101.50375939849624),
+        //                         price: dec!(0.4912),
+        //                     }],
+        //                     asks: vec![Asks {
+        //                         qty: dec!(101.50375939849624),
+        //                         price: dec!(0.4912),
+        //                     }]
+        //                 }
+        //             ]
+        //         )
+        //     );
     }
 }
