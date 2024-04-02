@@ -25,15 +25,20 @@ impl BinanceInterface {
     pub fn new(key: &Key, test: bool) -> Self {
         if test {
             let config = Config {
-                binance_us_api: true,
                 ..Config::testnet()
             };
-            // if config.binance_us_api != true {
-            //     panic!("fake");
-            // } else {
-            //     panic!("bullshit");
-            // }
-            BinanceInterface {
+            return BinanceInterface {
+                general: Binance::new_with_config(None, None, &config),
+                market: Binance::new_with_config(None, None, &config),
+                account: Binance::new_with_config(None, None, &config),
+                wallet: Binance::new_with_config(None, None, &config),
+            };
+        } else {
+            let config = Config {
+                binance_us_api: true,
+                ..Default::default()
+            };
+            return BinanceInterface {
                 general: Binance::new_with_config(None, None, &config),
                 market: Binance::new_with_config(None, None, &config),
                 account: Binance::new_with_config(
@@ -46,18 +51,7 @@ impl BinanceInterface {
                     Some(key.secret.clone()),
                     &config,
                 ),
-            }
-        } else {
-            let config = Config {
-                binance_us_api: true,
-                ..Default::default()
             };
-            BinanceInterface {
-                general: Binance::new_with_config(None, None, &config),
-                market: Binance::new_with_config(None, None, &config),
-                account: Binance::new_with_config(None, None, &config),
-                wallet: Binance::new_with_config(None, None, &config),
-            }
         }
     }
 
@@ -66,7 +60,6 @@ impl BinanceInterface {
     }
 
     pub async fn get_account_fees(&self) -> Option<TradeFees> {
-        println!("{:?}", self.wallet.trade_fees(None).await);
         self.wallet.trade_fees(None).await.ok()
     }
 

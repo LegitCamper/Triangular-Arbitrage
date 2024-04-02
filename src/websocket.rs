@@ -195,6 +195,7 @@ async fn place_orders(
                             break;
                         }
 
+                        info!("Placing Orders: {:?}", order);
                         place_order(order, &exchange_info, &account).await;
 
                         // ensure order has gone through before continuing with following orders

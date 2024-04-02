@@ -11,7 +11,7 @@ use tokio::{
     time::{interval, Duration},
 };
 
-// // Configurations
+// Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 const STARTING_AMOUNT: Decimal = dec!(50.0); // Staring amount in USD
 const MINIMUN_PROFIT: Decimal = dec!(0.001); // in USD
@@ -217,7 +217,6 @@ fn calculate_profitablity(
         };
         // TODO: this might be able to be paid with the amount cut for filters
         coin_qty -= coin_qty * find_fee(&trading_fees, symbol)?;
-        println!("coin_qty: {coin_qty}");
     }
     Some((coin_qty, qtys, prices))
 }
@@ -416,6 +415,7 @@ fn adhere_filters(
 
 #[cfg(test)]
 mod tests {
+    use binance::config::Config;
     use binance::rest_model::{Asks, Bids, ExchangeInformation, Filters, OrderBook};
     use lazy_static::lazy_static;
 
@@ -429,7 +429,8 @@ mod tests {
                 key: "".to_string(),
                 secret: "".to_string()
             },
-            true
+            // true
+            false
         );
     }
 
@@ -473,7 +474,6 @@ mod tests {
         );
 
         symbol = Symbol::new("ADA", "USDT");
-        // panic!("{}", get_step_size(&symbol, &exchange_info).unwrap());
         assert_eq!(dec!(0.1), get_step_size(&symbol, &exchange_info).unwrap());
         assert_eq!(
             dec!(101.5),
@@ -486,13 +486,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculate_profitablity() {
-        use binance::{api::*, config::*, rest_model::*, wallet::*};
-        let wallet: Wallet = Binance::new_with_env(&Config::testnet());
-        let records = wallet.trade_fees(None).await;
-        assert!(records.is_ok(), "{:?}", records);
-
-        // let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
-        // let trading_fees = INTERFACE.get_account_fees().await.unwrap();
+        let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
+        let trading_fees = INTERFACE.get_account_fees().await.unwrap();
 
         //     assert_eq!(
         //         Some((
