@@ -1,0 +1,867 @@
+[
+  {
+    "symbol": "1INCHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AAVEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ACHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ADABTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ADAETH",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ADAUSDC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ADAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ADXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ALGOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ALICEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ALPINEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ANKRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "APEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "API3USDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "APTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ARBUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ASTRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ATOMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AUDIOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AVAXBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AVAXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AXLUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "AXSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BALUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BANDUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BATUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BCHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BICOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BLURUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BNBBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BNBUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BNTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BOSONUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BTCUSDC",
+    "makerCommission": "0",
+    "takerCommission": "0"
+  },
+  {
+    "symbol": "BTCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "BTRSTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CELOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CELRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CHZUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CLVUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "COMPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "COTIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CRVUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CTSIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "CUDOSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DAIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DARUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DASHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DGBUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DIAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DOGEBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DOGEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "DOTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "EGLDUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ENJUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ENSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "EOSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ETCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ETHBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ETHUSDC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ETHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FETUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FILUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FLOKIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FLOWUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FLUXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FORTHUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FORTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "FTMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "GALAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "GALUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "GLMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "GRTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "GTCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "HBARUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ICPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ICXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ILVUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "IMXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "IOSTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "IOTAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "JAMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "KAVAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "KDAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "KNCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "KSMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LAZIOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LDOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LINKBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LINKUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LOKAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LOOMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LPTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LRCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LSKUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LTCBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LTCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "LTOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MANAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MASKUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MATICBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MATICETH",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MATICUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MKRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "MXCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "NEARUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "NEOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "NMRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "OCEANUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "OGNUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ONEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ONGUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ONTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "OPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ORBSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "OXTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "PAXGUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "POLYXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "PONDUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "PORTOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "PROMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "QNTUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "QTUMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RADUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RAREUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "REEFUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RENUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "REQUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RLCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RNDRUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ROSEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "RVNUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SANDUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SANTOSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SHIBUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SKLUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SLPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SNXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SOLBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SOLETH",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SOLUSDC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SOLUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "STGUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "STMXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "STORJUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SUIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SUSHIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "SYSUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "TFUELUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "THETAUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "TLMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "TRACUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "TUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "TUSDUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "UNIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "USDCUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "USDTUSD",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "VETUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "VITEUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "VOXELUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "VTHOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "WAXPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "WBTCBTC",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "XECUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "XLMUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "XNOUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "XRPUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "XTZUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "YFIUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ZECUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ZENUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ZILUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  },
+  {
+    "symbol": "ZRXUSDT",
+    "makerCommission": "0.004",
+    "takerCommission": "0.006"
+  }
+]

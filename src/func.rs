@@ -1,6 +1,6 @@
 use binance::rest_model::{ExchangeInformation, Filters, OrderBook, TradeFees};
 use itertools::Itertools;
-use log::{error, trace, warn};
+use log::{trace, info};
 use rust_decimal::prelude::*;
 use rust_decimal_macros::dec;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ use tokio::{
 // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
 const STARTING_AMOUNT: Decimal = dec!(50.0); // Staring amount in USD
-const MINIMUN_PROFIT: Decimal = dec!(0.001); // in USD
+const MINIMUN_PROFIT: Decimal = dec!(0.0000001); // in USD
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Key {
@@ -25,7 +25,7 @@ pub struct Key {
 pub fn read_key() -> Key {
     let mut file = File::open("key.json").expect("Could not read the json file");
     let mut contents = String::new();
-    file.read_to_string(&mut contents)
+    let _ = file.read_to_string(&mut contents)
         .expect("Could not deserialize the file, error");
     serde_json::from_str(&contents.as_str()).expect("Could not deserialize")
 }
@@ -168,57 +168,40 @@ fn calculate_profitablity(
     exchange_info: &ExchangeInformation,
     order: &[(Symbol, ArbOrd); 3],
     coin_storage: [OrderBook; 3],
+    starting_amount: Option<Decimal>,
+    // returns (profit, qtys, prices)
 ) -> Option<(Decimal, Vec<Decimal>, Vec<Decimal>)> {
-    let mut coin_qty = STARTING_AMOUNT;
+    let mut coin_qty = starting_amount.unwrap_or(STARTING_AMOUNT);
     let mut qtys = vec![];
     let mut prices = vec![];
-    for (coin_data, (symbol, order)) in coin_storage.iter().zip(order.iter()) {
-        coin_qty = match &order {
+    for (coin_data, (symbol, orders)) in coin_storage.iter().zip(order.iter()) {
+        let (price, qty) = match &orders {
             ArbOrd::Buy => {
-                let amount = adhere_filters(
-                    exchange_info,
-                    symbol,
-                    coin_data.asks[0].qty,
-                    coin_data.asks[0].price,
-                )?;
-                qtys.push(amount);
-                prices.push(coin_data.asks[0].price);
-                if amount > coin_data.asks[0].qty {
-                    // TODO: check this logic
-                    error!(
-                        "not enough coins, I want: {}, they want: {}",
-                        amount, coin_data.asks[0].qty
-                    );
-                    return None;
-                } else {
-                    amount
-                }
+                (coin_data.asks[0].price, coin_data.asks[0].qty)
             }
             ArbOrd::Sell => {
-                let amount = adhere_filters(
-                    exchange_info,
-                    symbol,
-                    coin_data.bids[0].qty,
-                    coin_data.bids[0].price,
-                )?;
-                qtys.push(amount);
-                prices.push(coin_data.bids[0].price);
-                if amount > coin_data.bids[0].qty {
-                    // TODO: check this logic
-                    error!(
-                        "not enough coins, I want: {}, they want: {}",
-                        amount, coin_data.bids[0].qty
-                    );
-                    return None;
-                } else {
-                    amount
-                }
+                (coin_data.bids[0].price, coin_data.bids[0].qty)
             }
         };
+        let amount = adhere_filters(
+            exchange_info,
+            symbol,
+            coin_qty, // this was qty and was WRONG
+            price,
+        )?;
+        if qty < amount {
+            // rerun with decreased starting amount
+            return calculate_profitablity(trading_fees, exchange_info, order, coin_storage, Some(qty))
+        } else {
+            qtys.push(amount);
+            prices.push(price);
+            coin_qty = amount
+        }
+
         // TODO: this might be able to be paid with the amount cut for filters
         coin_qty -= coin_qty * find_fee(&trading_fees, symbol)?;
     }
-    Some((coin_qty, qtys, prices))
+    Some((coin_qty - starting_amount.unwrap_or(STARTING_AMOUNT), qtys, prices))
 }
 
 #[allow(dead_code)]
@@ -259,18 +242,18 @@ pub async fn find_tri_arb(
                         continue 'inner;
                     };
                     let orders = find_order_order(pairs);
-                    let (mut profit, prices, amounts) = match calculate_profitablity(
+                    let (profit, prices, amounts) = match calculate_profitablity(
                         &trading_fees,
                         &exchange_info,
                         &orders,
                         [pair0.clone(), pair1.clone(), pair2.clone()],
+                        None
                     ) {
                         Some((profit, prices, amounts)) => (profit, prices, amounts),
                         None => continue 'inner,
                     };
-                    profit -= STARTING_AMOUNT;
                     if profit >= MINIMUN_PROFIT {
-                        warn!("Profit: {profit}, pairs: {:?}", orders);
+                        info!("Profit: {profit}, pairs: {:?}", orders);
                         let orders = create_order(
                             &trading_fees,
                             orders,
@@ -374,6 +357,8 @@ fn round_step_size(amount: Decimal, step_size: Decimal) -> Decimal {
         return amount.floor();
     };
 }
+
+// checks binance trade filters and returns new amounts in accordance
 fn adhere_filters(
     exchange_info: &ExchangeInformation,
     symbol: &Symbol,
@@ -389,19 +374,15 @@ fn adhere_filters(
                 step_size,
             } => {
                 if amount < min_qty {
-                    error!(
-                        "TRIED TO BUY LESS THAN THE REQUIRED AMOUNT: pair {}, min {}, qty {}",
-                        symbol.pair(),
-                        min_qty,
-                        amount
-                    );
+                    // TRIED TO BUY LESS THAN THE REQUIRED AMOUNT,
                     return None;
                 }
                 if amount > max_qty {
                     amount = max_qty;
                 }
+
                 if (amount % step_size) != dec!(0) {
-                    round_step_size(amount, step_size);
+                    return Some(round_step_size(amount, step_size));
                 } else {
                     return Some(amount);
                 }
@@ -415,24 +396,25 @@ fn adhere_filters(
 
 #[cfg(test)]
 mod tests {
-    use binance::config::Config;
-    use binance::rest_model::{Asks, Bids, ExchangeInformation, Filters, OrderBook};
+   use binance::rest_model::{Asks, Bids, ExchangeInformation, Filters, OrderBook};
     use lazy_static::lazy_static;
 
     use super::*;
-    use crate::func::Key;
-    use crate::interface::*;
 
     lazy_static! {
-        static ref INTERFACE: BinanceInterface = BinanceInterface::new(
-            &Key {
-                key: "".to_string(),
-                secret: "".to_string()
-            },
-            // true
-            false
-        );
-    }
+    static ref EXCHANGE_INFORMATION: ExchangeInformation = {
+        let mut file = File::open("src/test_files/exchange_information.json").unwrap();
+        let mut contents = String::new();
+       let _ = file.read_to_string(&mut contents);
+        serde_json::from_str(&contents.as_str()).unwrap()
+    };
+    static ref TRADING_FEES: TradeFees= {
+        let mut file = File::open("src/test_files/trading_fees.json").unwrap();
+        let mut contents = String::new();
+        let _ = file.read_to_string(&mut contents);
+        serde_json::from_str(&contents.as_str()).unwrap()
+    };
+        }
 
     fn get_step_size(symbol: &Symbol, exchange_info: &ExchangeInformation) -> Option<Decimal> {
         for filter in symbol_filters(symbol, exchange_info).unwrap() {
@@ -450,95 +432,92 @@ mod tests {
 
     #[tokio::test]
     async fn test_step_size() {
-        let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
         let mut symbol: Symbol;
 
         symbol = Symbol::new("USDC", "USDT");
-        assert_eq!(dec!(1), get_step_size(&symbol, &exchange_info).unwrap());
+        assert_eq!(dec!(1), get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap());
         assert_eq!(
             dec!(50),
             round_step_size(
                 dec!(50.020008003201276),
-                get_step_size(&symbol, &exchange_info).unwrap()
+                get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap()
             )
         );
 
         symbol = Symbol::new("ADA", "USDC");
-        assert_eq!(dec!(0.1), get_step_size(&symbol, &exchange_info).unwrap());
+        assert_eq!(dec!(0.1), get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap());
         assert_eq!(
             dec!(101.2),
             round_step_size(
                 dec!(101.29791117420402),
-                get_step_size(&symbol, &exchange_info).unwrap()
+                get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap()
             )
         );
 
         symbol = Symbol::new("ADA", "USDT");
-        assert_eq!(dec!(0.1), get_step_size(&symbol, &exchange_info).unwrap());
+        assert_eq!(dec!(0.1), get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap());
         assert_eq!(
             dec!(101.5),
             round_step_size(
                 dec!(101.50375939849624),
-                get_step_size(&symbol, &exchange_info).unwrap()
+                get_step_size(&symbol, &EXCHANGE_INFORMATION).unwrap()
             )
         );
     }
 
     #[tokio::test]
     async fn test_calculate_profitablity() {
-        let exchange_info = INTERFACE.get_exchange_info().await.unwrap();
-        let trading_fees = INTERFACE.get_account_fees().await.unwrap();
-
-        //     assert_eq!(
-        //         Some((
-        //             dec!(1.0),
-        //             vec![dec!(49.980000000000004),],
-        //             vec![dec!(0.9996), dec!(0.4931), dec!(0.4912)],
-        //         )),
-        //         calculate_profitablity(
-        //             &trading_fees,
-        //             &exchange_info,
-        //             &[
-        //                 (Symbol::new("USDC", "USDT"), ArbOrd::Sell),
-        //                 (Symbol::new("ADA", "USDC"), ArbOrd::Sell),
-        //                 (Symbol::new("ADA", "USDT"), ArbOrd::Buy),
-        //             ],
-        //             [
-        //                 OrderBook {
-        //                     last_update_id: 1,
-        //                     bids: vec![Bids {
-        //                         qty: dec!(50.020008003201276),
-        //                         price: dec!(0.9996),
-        //                     }],
-        //                     asks: vec![Asks {
-        //                         qty: dec!(50.020008003201276),
-        //                         price: dec!(0.9996),
-        //                     }]
-        //                 },
-        //                 OrderBook {
-        //                     last_update_id: 1,
-        //                     bids: vec![Bids {
-        //                         qty: dec!(101.29791117420402),
-        //                         price: dec!(0.4931),
-        //                     }],
-        //                     asks: vec![Asks {
-        //                         qty: dec!(101.29791117420402),
-        //                         price: dec!(0.4931),
-        //                     }]
-        //                 },
-        //                 OrderBook {
-        //                     last_update_id: 1,
-        //                     bids: vec![Bids {
-        //                         qty: dec!(101.50375939849624),
-        //                         price: dec!(0.4912),
-        //                     }],
-        //                     asks: vec![Asks {
-        //                         qty: dec!(101.50375939849624),
-        //                         price: dec!(0.4912),
-        //                     }]
-        //                 }
-        //             ]
-        //         )
-        //     );
+            assert_eq!(
+                Some((
+                    dec!(-0.8964),                           // profit
+                    vec![dec!(50.0),dec!(49.7000),dec!(49.4)],// qtys
+                    vec![dec!(1.0), dec!(1.0), dec!(1.0)],   // prices
+                )),
+                calculate_profitablity(
+                    &TRADING_FEES,
+                    &EXCHANGE_INFORMATION,
+                    &[
+                        (Symbol::new("USDC", "USDT"), ArbOrd::Sell),
+                        (Symbol::new("ADA", "USDC"), ArbOrd::Sell),
+                        (Symbol::new("ADA", "USDT"), ArbOrd::Buy),
+                    ],
+                    [
+                        OrderBook {
+                            last_update_id: 1,
+                            bids: vec![Bids {
+                                qty: dec!(50.029),
+                                price: dec!(1.0),
+                            }],
+                            asks: vec![Asks {
+                                qty: dec!(50.029),
+                                price: dec!(1.0),
+                            }]
+                        },
+                        OrderBook {
+                            last_update_id: 1,
+                            bids: vec![Bids {
+                                qty: dec!(101.299),
+                                price: dec!(1.0),
+                            }],
+                            asks: vec![Asks {
+                                qty: dec!(101.299),
+                                price: dec!(1.0),
+                            }]
+                        },
+                        OrderBook {
+                            last_update_id: 1,
+                            bids: vec![Bids {
+                                qty: dec!(101.503),
+                                price: dec!(1.0),
+                            }],
+                            asks: vec![Asks {
+                                qty: dec!(1001.503),
+                                price: dec!(1.0),
+                            }]
+                        }
+                    ],
+                    None
+                )
+            );
     }
 }

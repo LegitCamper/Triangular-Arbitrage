@@ -310,13 +310,13 @@ async fn user_stream(
             web_socket.connect(&listen_key).await.unwrap(); // check error
 
             if let Err(e) = web_socket.event_loop(&keep_running).await {
-                println!("Error: {e}");
+                error!("Error: {e}");
             }
             user_stream.close(&listen_key).await.unwrap();
             web_socket.disconnect().await.unwrap();
-            println!("Userstrem closed and disconnected");
+            error!("Userstrem closed and disconnected");
         } else {
-            println!("Not able to start an User Stream (Check your API_KEY)");
+            error!("Not able to start an User Stream (Check your API_KEY)");
         }
     });
 
