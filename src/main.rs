@@ -10,7 +10,7 @@ use simple_logger::SimpleLogger;
 use tokio::signal;
 
 use func::{create_valid_pairs_catalog, find_tri_arb, read_key};
-use websocket::{start_market_websockets, start_order_placer};
+use websocket::{start_market_websockets, start_order_creator};
 
 mod func;
 mod interface;
@@ -42,7 +42,7 @@ async fn main() {
     let (ord_handle, ord_sort_handle) =
         start_market_websockets(keep_running.clone(), orderbook.clone(), &symbols).await;
     let (user_handle, user_channel, user_websocket_handle) =
-        start_order_placer(keep_running.clone(), key, &exchange_info, &server_time).await;
+        start_order_creator(keep_running.clone(), key, &exchange_info, &server_time).await;
     let validator_task = find_tri_arb(
         pair_combinations,
         user_channel,

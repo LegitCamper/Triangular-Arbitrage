@@ -1,4 +1,3 @@
-use crate::func::Key;
 use binance::account::*;
 use binance::api::*;
 use binance::config::*;
@@ -11,7 +10,7 @@ use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::func::Symbol;
+use crate::func::{Symbol, Key};
 
 #[allow(dead_code)]
 pub struct BinanceInterface {

@@ -1,7 +1,7 @@
 use binance::{
     account::*,
     api::*,
-    rest_model::{Asks, Bids, ExchangeInformation, OrderBook, OrderSide, OrderType, TimeInForce},
+    rest_model::{Asks, Bids, ExchangeInformation, OrderBook, OrderType, TimeInForce},
     userstream::*,
     websockets::*,
     ws_model::{CombinedStreamEvent, OrderUpdate, WebsocketEvent, WebsocketEventUntag},
@@ -22,7 +22,7 @@ use tokio::{
     time::timeout,
 };
 
-use crate::func::{ArbOrd, Key, OrderStruct};
+use crate::func::{Key, OrderStruct, OrderSide};
 
 pub async fn start_market_websockets(
     keep_running: Arc<AtomicBool>,
@@ -44,7 +44,6 @@ pub async fn start_market_websockets(
         loop {
             if let Some((symbol, data)) = rx.recv().await {
                 let mut orderbook = orderbook.lock().await;
-                // info!("Adding Symbol: {:?}", symbol);
 
                 match orderbook.get(&symbol) {
                     Some(old_data) => {
@@ -68,7 +67,7 @@ pub async fn start_market_websockets(
     (orderbook_sort_handle, orderbook_handles)
 }
 
-pub async fn start_order_placer(
+pub async fn start_order_creator(
     keep_running: Arc<AtomicBool>,
     key: Key,
     exchange_info: &ExchangeInformation,
@@ -134,6 +133,7 @@ fn multiple_orderbook(
     streams: Vec<String>,
     symbol: String,
 ) -> JoinHandle<()> {
+    info!("spawning websocket for: {symbol:?}");
     tokio::spawn(async move {
         let streams: Vec<String> = streams
             .into_iter()
@@ -233,13 +233,13 @@ async fn unwind_orders() {}
 async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, account: &Account) {
     let symbol = order.symbol.clone();
     let limit_order = match order.side {
-        ArbOrd::Buy => OrderRequest {
+        OrderSide::Buy => OrderRequest {
             symbol: symbol.to_string(),
             quantity: Some(order.amount),
             price: Some(order.price),
             order_type: OrderType::Limit,
             quote_order_qty: None,
-            side: OrderSide::Buy,
+            side: binance::rest_model::OrderSide::Buy,
             time_in_force: Some(TimeInForce::FOK),
             new_client_order_id: None,
             stop_price: None,
@@ -247,13 +247,13 @@ async fn place_order(order: &OrderStruct, exchange_info: &ExchangeInformation, a
             new_order_resp_type: None,
             ..OrderRequest::default()
         },
-        ArbOrd::Sell => OrderRequest {
+        OrderSide::Sell => OrderRequest {
             symbol: symbol.to_string(),
             quantity: Some(order.amount),
             price: Some(order.price),
             order_type: OrderType::Limit,
             quote_order_qty: None,
-            side: OrderSide::Sell,
+            side: binance::rest_model::OrderSide::Sell,
             time_in_force: Some(TimeInForce::FOK),
             new_client_order_id: None,
             stop_price: None,
