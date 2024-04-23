@@ -1,6 +1,6 @@
 use binance::rest_model::{ExchangeInformation, Filters, OrderBook, TradeFees};
 use itertools::Itertools;
-use log::trace;
+use log::{info, trace, warn};
 use rust_decimal::prelude::*;
 use rust_decimal_macros::dec;
 use serde::Deserialize;
@@ -8,13 +8,11 @@ use std::{collections::HashMap, fs::File, io::Read, sync::Arc};
 use tokio::{
     sync::{mpsc, Mutex},
     task::{self, JoinHandle},
-    time::{interval, Duration},
 };
 
 // Configurations
 const STABLE_COINS: [&str; 1] = ["USDT"]; // "TUSD", "BUSD", "USDC", "DAI"
-const STARTING_AMOUNT: Decimal = dec!(50.0); // Staring amount in USD
-const MINIMUN_PROFIT: Decimal = dec!(0.001); // in USD
+const STARTING_AMOUNT: Decimal = dec!(50); // Staring amount in USD
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Key {
@@ -209,6 +207,17 @@ pub struct OrderStruct {
     pub amount: Decimal,
 }
 
+macro_rules! skip_fail {
+    ($res:expr) => {
+        match $res {
+            Some(val) => val.clone(),
+            None => {
+                continue;
+            }
+        }
+    };
+}
+
 pub async fn find_tri_arb(
     valid_coin_pairs: Vec<[Symbol; 3]>,
     validator_writer: mpsc::UnboundedSender<Vec<OrderStruct>>,
@@ -217,102 +226,79 @@ pub async fn find_tri_arb(
     trading_fees: TradeFees,
 ) -> JoinHandle<()> {
     trace!("Find Triangular Arbitrage");
-
     task::spawn(async move {
         let valid_coin_pairs = valid_coin_pairs.as_slice();
-        let mut interval = interval(Duration::from_millis(10)); // TODO: this may need to be decreased
         loop {
-            interval.tick().await;
-
-            'inner: for pairs in valid_coin_pairs.iter() {
-                // loop through data and check for arbs
-                let new_orderbook = clone_orderbook(&pairs, &orderbook).await;
-                if let Some((pair0, pair1, pair2)) = new_orderbook {
-                    if pair0.bids.is_empty()
-                        || pair0.asks.is_empty()
-                        || pair1.bids.is_empty()
-                        || pair1.asks.is_empty()
-                        || pair2.bids.is_empty()
-                        || pair2.asks.is_empty()
-                    {
-                        // A pair was empty
-                        continue 'inner;
-                    };
-
-                    let order_data = find_order_order(pairs)
-                        .into_iter()
-                        .zip([pair0, pair1, pair2])
-                        .map(|(order, pair)| (order.0, order.1, pair))
-                        .collect::<Vec<(Symbol, OrderSide, OrderBook)>>();
-                    let order_data = order_data.as_slice();
-
-                    let profitablity =
-                        calculate_profitablity(&trading_fees, &exchange_info, &order_data, None);
-                    if let Some((profit, _, prices, amounts)) = profitablity {
-                        if profit >= MINIMUN_PROFIT {
-                            let orders = create_order(
-                                &trading_fees,
-                                &order_data,
-                                amounts.as_slice(),
-                                prices.as_slice(),
-                            )
-                            .await;
-
-                            // removing price that led to order
-                            remove_bought(orderbook.clone(), &order_data).await;
-                            validator_writer.send(orders).unwrap();
-                        }
-                    } else {
-                        continue 'inner;
-                    };
+            // loop through data and check for arbs
+            for pairs in valid_coin_pairs.iter() {
+                let mut orderbook = orderbook.lock().await;
+                let pair0 = skip_fail!(orderbook.get(&pairs[0].pair()));
+                let pair1 = skip_fail!(orderbook.get(&pairs[1].pair()));
+                let pair2 = skip_fail!(orderbook.get(&pairs[2].pair()));
+                if pair0.bids.is_empty()
+                    || pair0.asks.is_empty()
+                    || pair1.bids.is_empty()
+                    || pair1.asks.is_empty()
+                    || pair2.bids.is_empty()
+                    || pair2.asks.is_empty()
+                {
+                    // A orderbook was empty
+                    continue;
                 }
+                let order_data = find_order_order(pairs)
+                    .into_iter()
+                    .zip([pair0, pair1, pair2])
+                    .map(|(order, pair)| (order.0, order.1, pair))
+                    .collect::<Vec<(Symbol, OrderSide, OrderBook)>>();
+                let order_data = order_data.as_slice();
+
+                let profitablity =
+                    calculate_profitablity(&trading_fees, &exchange_info, &order_data, None);
+                if let Some((profit, fees, prices, amounts)) = profitablity {
+                    if profit.is_sign_positive() {
+                        info!("profit: {profit:?}");
+                        let orders =
+                            create_order(&fees, &order_data, amounts.as_slice(), prices.as_slice())
+                                .await;
+
+                        // removing price that led to order
+                        for (symbol, side, _) in order_data.iter() {
+                            let pair = orderbook.get_mut(&symbol.pair()).unwrap();
+                            match side {
+                                OrderSide::Buy => {
+                                    pair.asks.remove(0);
+                                }
+                                OrderSide::Sell => {
+                                    pair.bids.remove(0);
+                                }
+                            }
+                        }
+
+                        // finally send the data to ordering socket
+                        validator_writer.send(orders).unwrap();
+                    }
+                } else {
+                    continue;
+                };
             }
         }
     })
 }
 
-async fn remove_bought(
-    orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
-    order_data: &[(Symbol, OrderSide, OrderBook)],
-) {
-    let mut orderbook = orderbook.lock().await;
-    for (symbol, side, _) in order_data.iter() {
-        let pair = orderbook.get_mut(&symbol.pair()).unwrap();
-        match side {
-            OrderSide::Buy => {
-                pair.asks.remove(0);
-            }
-            OrderSide::Sell => {
-                pair.bids.remove(0);
-            }
-        }
-    }
-}
-
-async fn clone_orderbook(
-    pairs: &[Symbol; 3],
-    orderbook: &Arc<Mutex<HashMap<String, OrderBook>>>,
-) -> Option<(OrderBook, OrderBook, OrderBook)> {
-    let orderbook = orderbook.lock().await;
-    Some((
-        orderbook.get(&pairs[0].pair())?.clone(),
-        orderbook.get(&pairs[1].pair())?.clone(),
-        orderbook.get(&pairs[2].pair())?.clone(),
-    ))
-}
-
 async fn create_order(
-    trading_fees: &TradeFees,
+    trading_fees: &Decimal,
     order_data: &[(Symbol, OrderSide, OrderBook)],
     qtys: &[Decimal],
     prices: &[Decimal],
 ) -> Vec<OrderStruct> {
     let mut orders = vec![];
 
+    // TODO: THE FEES MAY NOT ALWAYS BE THE SAME AS EACH OTHER
+    let trading_fee = trading_fees / dec!(3);
+
     for (count, (symbol, side, _)) in order_data.iter().enumerate() {
-        // calculate fees
         let amount = if count > 0 {
-            qtys[count] - qtys[count] * find_fee(trading_fees, symbol).unwrap()
+            qtys[count] - qtys[count] * trading_fee
         } else {
             qtys[count]
         };

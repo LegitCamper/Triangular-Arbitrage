@@ -17,7 +17,7 @@ mod interface;
 use interface::BinanceInterface;
 mod websocket;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 24)]
 async fn main() {
     SimpleLogger::new()
         .with_level(Info)
@@ -35,12 +35,12 @@ async fn main() {
     let trading_fees = interface.get_account_fees().await.unwrap();
     let server_time = interface.get_server_time().await.unwrap();
     let (pairs, symbols) = interface.get_pairs().await.unwrap();
-    let (pairs, symbols) = (pairs.as_slice(), symbols.as_slice());
+    let (pairs, _) = (pairs.as_slice(), symbols.as_slice());
     let orderbook = interface.starter_orderbook(&pairs).await;
 
-    let pair_combinations = create_valid_pairs_catalog(pairs).await;
+    let pair_combinations = create_valid_pairs_catalog(&pairs).await;
     let (ord_handle, ord_sort_handle) =
-        start_market_websockets(keep_running.clone(), orderbook.clone(), &symbols).await;
+        start_market_websockets(keep_running.clone(), orderbook.clone(), &pairs).await;
     let (user_handle, user_channel, user_websocket_handle) =
         start_order_creator(keep_running.clone(), key, &exchange_info, &server_time).await;
     let validator_task = find_tri_arb(

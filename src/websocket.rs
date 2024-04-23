@@ -22,27 +22,27 @@ use tokio::{
     time::timeout,
 };
 
-use crate::func::{Key, OrderStruct, OrderSide};
+use crate::func::{Key, OrderSide, OrderStruct, Symbol};
 
 pub async fn start_market_websockets(
     keep_running: Arc<AtomicBool>,
     orderbook: Arc<Mutex<HashMap<String, OrderBook>>>,
-    symbols: &[String],
+    pairs: &[Symbol],
 ) -> (JoinHandle<()>, Vec<JoinHandle<()>>) {
     let (tx, mut rx) = unbounded_channel();
 
     let mut orderbook_handles = Vec::new();
-    for stream in symbols.iter() {
+    for pair in pairs.iter() {
         orderbook_handles.push(multiple_orderbook(
             keep_running.clone(),
             tx.clone(),
-            vec![stream.to_string()],
-            stream.to_string(),
+            vec![pair.pair()],
+            pair.pair(),
         ));
     }
     let orderbook_sort_handle = tokio::spawn(async move {
         loop {
-            if let Some((symbol, data)) = rx.recv().await {
+            while let Some((symbol, data)) = rx.recv().await {
                 let mut orderbook = orderbook.lock().await;
 
                 match orderbook.get(&symbol) {
@@ -55,11 +55,9 @@ pub async fn start_market_websockets(
                     }
                     None => {
                         warn!("Symbol does not exist in orderbook");
-                        orderbook.insert(symbol, data).unwrap();
+                        orderbook.insert(symbol, sort_by_price(data)).unwrap();
                     }
                 }
-            } else {
-                error!("orderbook websocket channel None");
             }
         }
     });
@@ -93,10 +91,12 @@ pub async fn start_order_creator(
     (user_handle, tx, user_websocket_handle)
 }
 
-fn sort_by_price(mut orderbook: OrderBook) -> OrderBook {
-    orderbook.bids = sort_bids(orderbook.bids);
-    orderbook.asks = sort_asks(orderbook.asks);
-    orderbook
+fn sort_by_price(orderbook: OrderBook) -> OrderBook {
+    OrderBook {
+        last_update_id: orderbook.last_update_id,
+        bids: sort_bids(orderbook.bids),
+        asks: sort_asks(orderbook.asks),
+    }
 }
 fn sort_bids(mut vector: Vec<Bids>) -> Vec<Bids> {
     let mut swapped = true;
@@ -133,13 +133,11 @@ fn multiple_orderbook(
     streams: Vec<String>,
     symbol: String,
 ) -> JoinHandle<()> {
-    info!("spawning websocket for: {symbol:?}");
     tokio::spawn(async move {
         let streams: Vec<String> = streams
             .into_iter()
-            .map(|symbol| partial_book_depth_stream(symbol.to_lowercase().as_str(), 20, 100))
+            .map(|symbol| partial_book_depth_stream(&symbol.to_lowercase(), 20, 1000))
             .collect();
-
         let mut web_socket: WebSockets<'_, CombinedStreamEvent<_>> =
             WebSockets::new(|event: CombinedStreamEvent<WebsocketEventUntag>| {
                 match event.data {
@@ -157,15 +155,22 @@ fn multiple_orderbook(
                 Ok(())
             });
 
-        match web_socket.connect_multiple(streams).await {
-            Ok(_) => {}
-            Err(e) => error!("{symbol:?} Websocket Error: {e}"),
+        // Ensure stream was connected without issue
+        if let Err(e) = web_socket.connect_multiple(streams.clone()).await {
+            warn!("Failed to connect bc error: {e}; retrying");
+            multiple_orderbook(
+                keep_running.clone(),
+                channel.clone(),
+                streams,
+                symbol.clone(),
+            );
         }
+
         if let Err(e) = web_socket.event_loop(&keep_running).await {
-            error!("{symbol:?} Websocket Error: {e}");
+            error!("{symbol}: Error: {e}, restarting...");
         }
         web_socket.disconnect().await.unwrap();
-        info!("{symbol:?} Websocket Disconnected");
+        warn!("{symbol}: disconnected");
     })
 }
 
@@ -321,4 +326,97 @@ async fn user_stream(
     });
 
     (rx, handle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sort_asks, sort_bids, sort_by_price};
+    use binance::rest_model::{Asks, Bids, OrderBook};
+    use lazy_static::lazy_static;
+    use rust_decimal_macros::dec;
+
+    lazy_static! {
+        static ref ASKS: Vec<Asks> = vec![
+            Asks {
+                price: dec!(10),
+                qty: dec!(100),
+            },
+            Asks {
+                price: dec!(100),
+                qty: dec!(100),
+            },
+            Asks {
+                price: dec!(50),
+                qty: dec!(10),
+            },
+            Asks {
+                price: dec!(1),
+                qty: dec!(1),
+            },
+        ];
+        static ref BIDS: Vec<Bids> = vec![
+            Bids {
+                price: dec!(10),
+                qty: dec!(100),
+            },
+            Bids {
+                price: dec!(100),
+                qty: dec!(100),
+            },
+            Bids {
+                price: dec!(50),
+                qty: dec!(10),
+            },
+            Bids {
+                price: dec!(1),
+                qty: dec!(1),
+            },
+        ];
+    }
+
+    #[test]
+    fn test_sort() {
+        let orderbook = OrderBook {
+            last_update_id: 1,
+            bids: BIDS.to_vec(),
+            asks: ASKS.to_vec(),
+        };
+        let sortedbook = sort_by_price(orderbook);
+        assert_eq!(dec!(1), sortedbook.asks[0].price);
+        assert_eq!(dec!(100), sortedbook.bids[0].price);
+    }
+
+    #[test]
+    fn test_sort_asks() {
+        let sorted_asks = sort_asks(ASKS.to_vec());
+
+        assert_eq!(dec!(1), sorted_asks[0].price);
+        assert_eq!(dec!(1), sorted_asks[0].qty);
+
+        assert_eq!(dec!(10), sorted_asks[1].price);
+        assert_eq!(dec!(100), sorted_asks[1].qty);
+
+        assert_eq!(dec!(50), sorted_asks[2].price);
+        assert_eq!(dec!(10), sorted_asks[2].qty);
+
+        assert_eq!(dec!(100), sorted_asks[3].price);
+        assert_eq!(dec!(100), sorted_asks[3].qty);
+    }
+
+    #[test]
+    fn test_sort_bids() {
+        let sorted_bids = sort_bids(BIDS.to_vec());
+
+        assert_eq!(dec!(100), sorted_bids[0].price);
+        assert_eq!(dec!(100), sorted_bids[0].qty);
+
+        assert_eq!(dec!(50), sorted_bids[1].price);
+        assert_eq!(dec!(10), sorted_bids[1].qty);
+
+        assert_eq!(dec!(10), sorted_bids[2].price);
+        assert_eq!(dec!(100), sorted_bids[2].qty);
+
+        assert_eq!(dec!(1), sorted_bids[3].price);
+        assert_eq!(dec!(1), sorted_bids[3].qty);
+    }
 }
